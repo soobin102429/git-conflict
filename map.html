@@ -394,14 +394,15 @@
   }
 
   // Schedule render with retry logic - waits for non-zero size
-  function scheduleRender(el, renderFn, maxRetries = 10) {
+  function scheduleRender(el, renderFn, maxRetries = 60) {
     let retries = 0;
-    
+    let observed = false;
+
     function tryRender() {
       if (!el) return;
-      
+
       const {w, h} = getSize(el);
-      
+
       // If size is valid, render
       if (w > 250 && h > 150) {
         console.log(`[scheduleRender] Rendering with size ${w}x${h}`);
@@ -416,9 +417,25 @@
         requestAnimationFrame(tryRender);
       } else {
         console.warn(`[scheduleRender] Max retries exceeded for`, el.id, `size: ${w}x${h}`);
+        // Fallback: observe size changes and render when non-zero
+        if (!observed && window.ResizeObserver) {
+          observed = true;
+          const ro = new ResizeObserver(entries => {
+            for (const entry of entries) {
+              const rect = entry.contentRect || entry.target.getBoundingClientRect();
+              if (rect.width > 250 && rect.height > 150) {
+                try {
+                  renderFn(el, rect.width, rect.height);
+                } catch (e) { console.error("[scheduleRender] Error on ResizeObserver:", e); }
+                ro.disconnect();
+              }
+            }
+          });
+          try { ro.observe(el); } catch(e){ console.warn('[scheduleRender] ResizeObserver observe failed', e); }
+        }
       }
     }
-    
+
     requestAnimationFrame(tryRender);
   }
 
