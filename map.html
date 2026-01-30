@@ -305,6 +305,8 @@
   monthRange.attr("max", months.length-1).attr("value", months.length-1);
   monthLabel.text(months[months.length-1]);
 
+  console.log("[DATA] Loaded rows:", raw.length, "months:", months.length);
+
   // month -> fips -> record (fast lookup)
   const idx = d3.group(raw, d=>d.month, d=>d.fips);
 
@@ -782,6 +784,7 @@
   }
 
   function render(){
+    console.log("[render] start - monthIndex=", +monthRange.node().value, "isCompareMode=", isCompareMode, "pinned=", pinned);
     const month = months[+monthRange.node().value];
     const metric = metricSel.node().value;
     const mode = scaleMode.node().value;
@@ -1314,6 +1317,7 @@
   // ---------- NEW MODULAR INSIGHTS CHARTS ----------
   // TREND CHART - Below map version (reusing renderTimeSeries logic)
   function updateTrendChartBelow(){
+    console.log("[updateTrendChartBelow] called, pinned=", pinned, "comparedStates=", comparedStates.length);
     const containerEl = document.getElementById("trendChartContainer");
     if (!containerEl) {
       console.warn("[Trend] Container not found");
@@ -1650,6 +1654,7 @@
   }
 
   function updateScatterChart(){
+    console.log("[updateScatterChart] called, month=", months[+monthRange.node().value]);
     const containerEl = document.getElementById("scatterChartContainer");
     if (!containerEl) {
       console.warn("[Scatter] Container not found");
@@ -1794,6 +1799,7 @@
 
   // 2. HEATMAP CHART - Location × Weapon for selected state
   function updateHeatmapChart(){
+    console.log("[updateHeatmapChart] called, pinned=", pinned);
     const containerEl = document.getElementById("heatmapChartContainer");
     if (!containerEl) {
       console.warn("[Heatmap] Container not found");
@@ -1906,6 +1912,7 @@
 
   // 3. STACKED COMPOSITION CHART - Weapon types
   function updateStackedChart(){
+    console.log("[updateStackedChart] called, pinned=", pinned);
     const containerEl = document.getElementById("stackedChartContainer");
     if (!containerEl) {
       console.warn("[Stacked] Container not found");
