@@ -883,7 +883,122 @@
     });
     
     html += `</table>`;
+    
+    // Add Radar comparison if 2-3 states selected
+    if(comparedStates.length >= 2){
+      html += `<div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--stroke);">
+                 <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:8px;">Profile Comparison</div>
+                 <svg id="compRadar" width="100%" height="200" style="background:rgba(0,0,0,.2); border-radius:6px; overflow:visible;"></svg>
+               </div>`;
+    }
+    
     compCard.innerHTML = html;
+    
+    // Render comparison radar if needed
+    if(comparedStates.length >= 2){
+      renderComparisonRadar(month);
+    }
+  }
+  
+  function renderComparisonRadar(month){
+    const svg = d3.select('#compRadar');
+    svg.selectAll('*').remove();
+    
+    const width = +svg.attr('width'), height = +svg.attr('height');
+    const radius = Math.min(width, height) / 2 - 30;
+    const center = {x: width / 2, y: height / 2};
+    
+    const colors = ['#ff7b72', '#58a6ff', '#ffd657'];
+    const axes = ['Rate/100k', 'Trend ↑', 'Clear', 'Firearm', 'Stranger'];
+    const angleSlice = (Math.PI * 2) / axes.length;
+    
+    const g = svg.append('g').attr('transform', `translate(${center.x},${center.y})`);
+    
+    // Draw concentric circles (grid)
+    for(let i = 1; i <= 3; i++){
+      const r = (radius / 3) * i;
+      g.append('circle')
+        .attr('r', r)
+        .attr('fill', 'none')
+        .attr('stroke', 'rgba(88,166,255,.1)')
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '2 2');
+    }
+    
+    // Draw axes
+    axes.forEach((axis, i) => {
+      const angle = angleSlice * i - Math.PI / 2;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      
+      g.append('line')
+        .attr('x1', 0).attr('y1', 0)
+        .attr('x2', x).attr('y2', y)
+        .attr('stroke', 'rgba(88,166,255,.15)')
+        .attr('stroke-width', 1);
+      
+      // Axis labels (smaller font for comparison)
+      const lx = Math.cos(angle) * (radius + 20);
+      const ly = Math.sin(angle) * (radius + 20);
+      g.append('text')
+        .attr('x', lx).attr('y', ly)
+        .attr('text-anchor', 'middle')
+        .attr('dominant-baseline', 'middle')
+        .attr('font-size', '9px')
+        .attr('fill', 'rgba(139,148,158,.6)')
+        .text(axis);
+    });
+    
+    // Draw polygons and nodes for each state
+    comparedStates.forEach((fips, stateIdx) => {
+      const scores = calculateZScores(month, fips);
+      if(!scores) return;
+      
+      const normalize = (z) => Math.max(0, Math.min(1, (z + 2) / 4));
+      const values = [
+        normalize(scores.rateZ),
+        normalize(scores.trendZ),
+        1 - scores.clearInv,
+        scores.firearm,
+        scores.stranger
+      ];
+      
+      // Draw polygon
+      const points = values.map((val, i) => {
+        const angle = angleSlice * i - Math.PI / 2;
+        const r = val * radius;
+        return [Math.cos(angle) * r, Math.sin(angle) * r];
+      });
+      
+      const pathD = points.map((p, i) => (i === 0 ? `M ${p[0]},${p[1]}` : `L ${p[0]},${p[1]}`)).join(' ') + ' Z';
+      
+      g.append('path')
+        .attr('d', pathD)
+        .attr('fill', colors[stateIdx])
+        .attr('fill-opacity', 0.15)
+        .attr('stroke', colors[stateIdx])
+        .attr('stroke-width', 1.5);
+      
+      // Draw nodes
+      points.forEach((p, i) => {
+        g.append('circle')
+          .attr('cx', p[0]).attr('cy', p[1])
+          .attr('r', 3)
+          .attr('fill', colors[stateIdx])
+          .attr('stroke', 'var(--bg)')
+          .attr('stroke-width', 1);
+      });
+    });
+    
+    // Legend
+    const legend = svg.append('g').attr('transform', `translate(${center.x - 60}, ${center.y + radius + 30})`);
+    comparedStates.forEach((fips, i) => {
+      const r = rec(month, fips);
+      const abbr = r?.abbr || '?';
+      legend.append('circle').attr('r', 4).attr('fill', colors[i]);
+      legend.append('text').attr('x', 12).attr('y', 4).attr('font-size', '9px').attr('fill', 'var(--text)').text(abbr);
+      legend.attr('transform', `translate(${(center.x - 60) + i * 50}, ${center.y + radius + 30})`);
+    });
   }
 
   metricSel.on("change", render);
