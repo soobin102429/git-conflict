@@ -94,7 +94,7 @@
             onmouseout="if(!window.isCompareMode) { this.style.background='rgba(88,166,255,.2)'; this.style.borderColor='rgba(88,166,255,.4)'; }">
       📊 Compare (0)
     </button>
-    <div class="hint">Hover = preview • Click = pin panel</div>
+    <div class="hint" id="hint">Hover = preview • Click = pin panel</div>
   </div>
 </header>
 
@@ -322,6 +322,7 @@
   let isCompareMode = false;
   let comparedStates = [];
   const compareBtn = document.getElementById("compareBtn");
+  const hintEl = document.getElementById("hint");
 
   // Calculate 12-month trend
   function calculateTrend(fips){
@@ -811,11 +812,16 @@
     
     if(!isCompareMode && pinned != null){
       setPanel(months[+monthRange.node().value], pinned, true);
+      if(hintEl) hintEl.text = "Hover = preview • Click = pin panel";
     }else if(isCompareMode){
       // Show hint when entering compare mode
       pTitle.text("Select states to compare");
       pMonth.text("(up to 3)");
       kpis.html("");
+      if(hintEl) hintEl.textContent = "Click states to compare (up to 3) • ESC to exit";
+    }else{
+      // Reset hint
+      if(hintEl) hintEl.textContent = "Hover = preview • Click = pin panel";
     }
   };
 
@@ -1249,6 +1255,13 @@
       });
     });
   }
+  
+  // Keyboard shortcuts
+  document.addEventListener("keydown", (e) => {
+    if(e.key === "Escape" && isCompareMode){
+      window.toggleCompareMode();
+    }
+  });
 
   renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey();
 })();
