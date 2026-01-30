@@ -16,13 +16,13 @@
       --accent-low:#58a6ff; --accent-mid:#ffd657; --accent-high:#ff7b72;
       --shadow:0 8px 24px rgba(0,0,0,.4);
     }
-    body{ margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); letter-spacing:0.4px; }
+    body{ margin:0; font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); letter-spacing:0.4px; overflow-y:auto; }
     header{ display:flex; justify-content:space-between; align-items:center; padding:20px 28px;
       border-bottom:1px solid var(--stroke); background:rgba(13,17,23,.8); backdrop-filter:blur(12px); }
     header h1{ margin:0; font-size:18px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; color:var(--text); }
     header .hint{ color:var(--muted); font-size:12px; letter-spacing:0.5px; font-weight:500; }
 
-    .grid{ display:grid; grid-template-columns: 1fr 420px; gap:20px; padding:20px 28px; height:calc(100vh - 61px); box-sizing:border-box; }
+    .grid{ display:grid; grid-template-columns: 1fr 420px; gap:20px; padding:20px 28px; min-height:calc(100vh - 61px); box-sizing:border-box; }
     .left{ background:rgba(22,27,34,.6); border:1px solid var(--stroke); border-radius:16px; overflow:hidden; position:relative; display:flex; flex-direction:column; box-shadow:var(--shadow); backdrop-filter:blur(8px); }
     .controls{ display:flex; gap:14px; align-items:center; padding:16px 18px; border-bottom:1px solid var(--stroke); flex-wrap:wrap; background:rgba(22,27,34,.4); }
     label{ font-size:12px; color:var(--muted); display:flex; align-items:center; gap:8px; font-weight:600; letter-spacing:0.4px; text-transform:uppercase; }
@@ -82,17 +82,23 @@
     .state.compared:hover{ stroke:#ffd657; stroke-width:2.5; filter:drop-shadow(0 0px 16px rgba(255,214,87,.8)); }
 
     #insightsSection{
-      padding:20px 28px; background:transparent; display:block; gap:20px; width:100%;
+      padding:20px 28px; background:transparent; display:block; width:100%; margin-top:20px; margin-bottom:40px; box-sizing:border-box;
     }
     .insight-chart-wrapper{
       background:rgba(22,27,34,.6); border:1px solid var(--stroke); border-radius:16px;
       padding:20px; box-shadow:var(--shadow); backdrop-filter:blur(8px); margin-bottom:20px; width:100%; box-sizing:border-box;
+      overflow-x:auto;
     }
     .insight-chart-wrapper h3{
       margin:0 0 12px 0; font-size:14px; font-weight:700; letter-spacing:0.4px;
       text-transform:uppercase; color:#58a6ff;
     }
-    .insight-chart-wrapper svg{ width:100%; height:auto; display:block; }
+    .insight-chart-wrapper svg{ 
+      display:block; background:transparent;
+    }
+    #trendChartContainer, #scatterChartContainer, #stackedChartContainer, #heatmapChartContainer {
+      min-height:320px; width:100%; box-sizing:border-box;
+    }
 
     @media (max-width: 1200px){ .grid{ grid-template-columns: 1fr 350px; gap:14px; } }
     @media (max-width: 900px){ .grid{ grid-template-columns:1fr; height:auto; } .right{ max-height:none; } }
@@ -215,22 +221,22 @@
   
   <div class="insight-chart-wrapper">
     <h3>Trend Line (Selected State vs US Average)</h3>
-    <div id="trendChartContainer" style="min-height:280px; width:100%; box-sizing:border-box;"></div>
+    <div id="trendChartContainer"></div>
   </div>
 
   <div class="insight-chart-wrapper">
     <h3>Scatter Plot (Clearance Rate vs Offenses)</h3>
-    <div id="scatterChartContainer" style="min-height:320px; width:100%; box-sizing:border-box;"></div>
+    <div id="scatterChartContainer"></div>
   </div>
 
   <div class="insight-chart-wrapper">
     <h3>Weapon Composition (100% Stacked)</h3>
-    <div id="stackedChartContainer" style="min-height:200px; width:100%; box-sizing:border-box;"></div>
+    <div id="stackedChartContainer"></div>
   </div>
 
   <div class="insight-chart-wrapper">
     <h3>Location × Weapon Heatmap</h3>
-    <div id="heatmapChartContainer" style="min-height:300px; width:100%; box-sizing:border-box;"></div>
+    <div id="heatmapChartContainer"></div>
   </div>
 </section>
 
@@ -361,6 +367,56 @@
   let comparedStates = [];
   const compareBtn = document.getElementById("compareBtn");
   const hintEl = document.getElementById("hint");
+
+  // RESET APP STATE - Complete initialization
+  function resetAppState(){
+    console.log("[resetAppState] Resetting to initial state");
+    // 1. Exit compare mode
+    isCompareMode = false;
+    comparedStates = [];
+    pinned = null;
+    
+    // 2. Reset compare button styling
+    if(compareBtn){
+      compareBtn.style.background = "rgba(88,166,255,.2)";
+      compareBtn.style.borderColor = "rgba(88,166,255,.4)";
+      compareBtn.style.color = "#58a6ff";
+      compareBtn.style.opacity = "0.6";
+      compareBtn.textContent = "📊 Compare (0)";
+    }
+    
+    // 3. Clear sidebar panel
+    pTitle.text("Select a state");
+    pMonth.text("—");
+    pMetric.text("—");
+    kpis.html("");
+    topList.html("");
+    bottomList.html("");
+    pinHint.text("Not pinned");
+    
+    // 4. Reset hint text
+    if(hintEl) hintEl.textContent = "Hover = preview • Click = pin panel";
+    
+    // 5. Remove map highlights
+    svg.selectAll("path.state")
+      .classed("pinned", false)
+      .classed("compared", false);
+    
+    // 6. Hide comparison card
+    const compCard = document.getElementById("comparisonCard");
+    if(compCard) compCard.style.display = "none";
+    
+    // 7. Reset insights charts to default/placeholder
+    renderInsights();
+    
+    // 8. Re-render all sidebar charts with default state
+    const currentMonth = months[months.length - 1];
+    renderTimeSeries();
+    renderAgeChart();
+    renderSexChart();
+    renderSankey();
+    renderRankings(currentMonth);
+  }
 
   // Calculate 12-month trend
   function calculateTrend(fips){
@@ -1894,11 +1950,11 @@
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
     if(e.key === "Escape" && isCompareMode){
-      window.toggleCompareMode();
+      resetAppState();
     }
   });
 
-  renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey();
+  renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey(); renderInsights();
 })();
 
 </script>
