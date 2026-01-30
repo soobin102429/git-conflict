@@ -78,7 +78,8 @@
     .state:hover{ stroke:rgba(88,166,255,.6); stroke-width:2; filter:drop-shadow(0 4px 12px rgba(88,166,255,.3)); }
     .state:focus{ outline:none; stroke:#58a6ff; stroke-width:2.5; filter:drop-shadow(0 6px 16px rgba(88,166,255,.4)); }
     .state.pinned{ stroke:#58a6ff; stroke-width:2.5; filter:drop-shadow(0 0px 12px rgba(88,166,255,.4)); }
-    .state.compared{ stroke:#ffd657; stroke-width:2.2; filter:drop-shadow(0 0px 8px rgba(255,214,87,.5)); }
+    .state.compared{ stroke:#ffd657; stroke-width:2.2; filter:drop-shadow(0 0px 12px rgba(255,214,87,.6)); }
+    .state.compared:hover{ stroke:#ffd657; stroke-width:2.5; filter:drop-shadow(0 0px 16px rgba(255,214,87,.8)); }
 
     @media (max-width: 1200px){ .grid{ grid-template-columns: 1fr 350px; gap:14px; } }
     @media (max-width: 900px){ .grid{ grid-template-columns:1fr; height:auto; } .right{ max-height:none; } }
@@ -609,7 +610,17 @@
       .attr('aria-label', d => `State ${d.properties && d.properties.name ? d.properties.name : d.id}`)
       .attr("fill", d => {
         const r = rec(month, +d.id);
-        return r && isFinite(r[metric]) ? scale(r[metric]) : "#3d444d";
+        if(!r || !isFinite(r[metric])) return "#3d444d";
+        
+        const color = scale(r[metric]);
+        
+        // In compare mode, desaturate unselected states
+        if(isCompareMode && comparedStates.length > 0 && !comparedStates.includes(+d.id)){
+          const rgb = d3.rgb(color);
+          const gray = (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) * 0.6;
+          return d3.rgb(gray * 0.7, gray * 0.72, gray * 0.75).toString();
+        }
+        return color;
       })
       .on("mousemove", (event, d) => {
         if(isCompareMode) return; // No tooltip in compare mode
@@ -701,7 +712,18 @@
       .transition().duration(220)
       .attr("fill", d => {
         const r = rec(month, +d.id);
-        return r && isFinite(r[metric]) ? scale(r[metric]) : "#3d444d";
+        if(!r || !isFinite(r[metric])) return "#3d444d";
+        
+        const color = scale(r[metric]);
+        
+        // In compare mode, desaturate unselected states
+        if(isCompareMode && comparedStates.length > 0 && !comparedStates.includes(+d.id)){
+          const rgb = d3.rgb(color);
+          // Convert to grayscale with slight tint
+          const gray = (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) * 0.6;
+          return d3.rgb(gray * 0.7, gray * 0.72, gray * 0.75).toString();
+        }
+        return color;
       });
 
     sel.exit().remove();
