@@ -834,7 +834,7 @@
     
     if(!isCompareMode && pinned != null){
       setPanel(months[+monthRange.node().value], pinned, true);
-      if(hintEl) hintEl.text = "Hover = preview • Click = pin panel";
+      if(hintEl) hintEl.textContent = "Hover = preview • Click = pin panel";
     }else if(isCompareMode){
       // Show hint when entering compare mode
       pTitle.text("Select states to compare");
@@ -859,7 +859,30 @@
     }
     updateCompareBtn();
     renderComparison();
+    
+    // Re-render states to update colors
+    const month = months[+monthRange.node().value];
+    const metric = metricSel.node().value;
+    const mode = scaleMode.node().value;
+    const domain = getDomain(metric, month, mode);
+    const scale = d3.scaleQuantile().domain(domain.length > 1 ? [domain[0], domain[1]] : [0,1]).range(d3.range(9).map(i=>ramp(i/8)));
+    
     svg.selectAll("path.state")
+      .transition().duration(150)
+      .attr("fill", d => {
+        const r = rec(month, +d.id);
+        if(!r || !isFinite(r[metric])) return "#3d444d";
+        
+        const color = scale(r[metric]);
+        
+        // In compare mode, desaturate unselected states
+        if(isCompareMode && comparedStates.length > 0 && !comparedStates.includes(+d.id)){
+          const rgb = d3.rgb(color);
+          const gray = (rgb.r * 0.299 + rgb.g * 0.587 + rgb.b * 0.114) * 0.6;
+          return d3.rgb(gray * 0.7, gray * 0.72, gray * 0.75).toString();
+        }
+        return color;
+      })
       .classed("compared", d => comparedStates.includes(+d.id));
   };
 
