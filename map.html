@@ -801,13 +801,17 @@
     const container = d3.select("#insightContainer");
     container.html("");
     
+    // Get container width
+    const containerWidth = document.getElementById("insightContainer").offsetWidth || 320;
+    
     const svg = container.append("svg")
-      .attr("width", "100%")
+      .attr("width", containerWidth)
       .attr("height", 220)
       .style("overflow", "visible");
     
     const margin = {l: 45, t: 10, r: 10, b: 30};
-    const w = 400, h = 220 - margin.t - margin.b;
+    const w = containerWidth - margin.l - margin.r;
+    const h = 220 - margin.t - margin.b;
     const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
     // Aggregate by state
@@ -901,8 +905,11 @@
       });
     });
     
+    // Get container width
+    const containerWidth = document.getElementById("insightContainer").offsetWidth || 320;
+    
     const svg = container.append("svg")
-      .attr("width", "100%")
+      .attr("width", containerWidth)
       .attr("height", Math.min(400, 30 * topWeapons.length + 60))
       .style("overflow", "visible");
     
@@ -965,6 +972,8 @@
     const tabScatter = document.getElementById("tabScatter");
     const tabHeatmap = document.getElementById("tabHeatmap");
     
+    if(!tabScatter || !tabHeatmap) return; // Safety check
+    
     if(tab === "scatter"){
       tabScatter.style.background = "rgba(88,166,255,.2)";
       tabScatter.style.color = "#58a6ff";
@@ -972,7 +981,7 @@
       tabHeatmap.style.background = "transparent";
       tabHeatmap.style.color = "var(--muted)";
       tabHeatmap.style.borderBottom = "none";
-      renderScatterInsight();
+      setTimeout(() => renderScatterInsight(), 50);
     }else{
       tabHeatmap.style.background = "rgba(88,166,255,.2)";
       tabHeatmap.style.color = "#58a6ff";
@@ -980,13 +989,13 @@
       tabScatter.style.background = "transparent";
       tabScatter.style.color = "var(--muted)";
       tabScatter.style.borderBottom = "none";
-      renderHeatmapInsight();
+      setTimeout(() => renderHeatmapInsight(), 50);
     }
   };
   
   // Initial insight render
   window.renderInsights = function(){
-    renderScatterInsight();
+    setTimeout(() => renderScatterInsight(), 50);
   };
 
   // Exposed function for ranking list clicks
