@@ -100,6 +100,13 @@
         </select>
       </label>
 
+      <label>Scale
+        <select id="scaleMode">
+          <option value="relative">Relative (monthly)</option>
+          <option value="fixed">Fixed (5-year)</option>
+        </select>
+      </label>
+
       <label>Month
         <input id="month" type="range" min="0" max="0" step="1" value="0" />
       </label>
@@ -121,6 +128,20 @@
         <div class="small" id="pMonth">—</div>
       </div>
       <div class="small" id="pMetric">—</div>
+    </div>
+
+    <div class="card">
+      <div class="row"><h2>Rankings</h2><div class="small" id="rankMonth">—</div></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;">
+        <div>
+          <div class="small" style="font-weight:600; margin-bottom:6px; color:#ff7b72;">🔴 Top 10</div>
+          <div id="topList" style="font-size:11px;"></div>
+        </div>
+        <div>
+          <div class="small" style="font-weight:600; margin-bottom:6px; color:#58a6ff;">🔵 Bottom 10</div>
+          <div id="bottomList" style="font-size:11px;"></div>
+        </div>
+      </div>
     </div>
 
     <div class="card">
@@ -170,12 +191,16 @@
   const metricSel = d3.select("#metric");
   const monthRange= d3.select("#month");
   const monthLabel= d3.select("#monthLabel");
+  const scaleMode = d3.select("#scaleMode");
 
   const pTitle = d3.select("#pTitle");
   const pMonth = d3.select("#pMonth");
   const pMetric= d3.select("#pMetric");
   const pinHint= d3.select("#pinHint");
   const kpis   = d3.select("#kpis");
+  const topList= d3.select("#topList");
+  const bottomList= d3.select("#bottomList");
+  const rankMonth= d3.select("#rankMonth");
 
   // ---------- Formatters ----------
   const META = {
@@ -247,10 +272,10 @@
   window.addEventListener("resize", () => { fit(); render(); });
 
   // ---------- Legend (compact) ----------
-  function drawLegend(scale, metric, month){
+  function drawLegend(scale, metric, month, mode){
     legend.html("");
     const title = legend.append("div").text(META[metric].label);
-    const subtitle = legend.append("div").text(month);
+    const subtitle = legend.append("div").text(`${month} (${mode === "fixed" ? "Fixed 5y" : "Relative"})`);
 
     const canvas = legend.append("canvas").attr("width",160).attr("height",12).node();
     const ctx = canvas.getContext("2d");
@@ -269,6 +294,11 @@
     const row = legend.append("div").style("display","flex").style("justify-content","space-between").style("gap","10px").style("margin-top","8px");
     row.append("div").style("font-size","11px").style("font-weight","500").text("Lower: " + META[metric].fmt(min));
     row.append("div").style("font-size","11px").style("font-weight","500").text("Higher: " + META[metric].fmt(max));
+
+    // No data indicator
+    const noDataRow = legend.append("div").style("display","flex").style("align-items","center").style("gap","6px").style("margin-top","10px").style("font-size","10px").style("color","rgba(139,148,158,.7)");
+    noDataRow.append("rect").attr("width",12).attr("height",12).attr("fill","#3d444d").attr("rx","2");
+    noDataRow.append("text").text("No data/missing");
   }
 
   // ---------- Panel ----------
@@ -306,18 +336,42 @@
   // ---------- Render ----------
   const g = svg.append("g");
 
+  // Calculate fixed (5-year) domain for each metric
+  const fixedDomains = {};
+  Object.keys(META).forEach(metric => {
+    const vals = states.map(s => {
+      return d3.max(months, month => {
+        const r = rec(month, +s.id);
+        return r ? r[metric] : null;
+      });
+    }).filter(v => v != null && isFinite(v));
+    fixedDomains[metric] = [0, d3.max(vals)];
+  });
+
+  function getDomain(metric, month, mode) {
+    if (mode === "fixed") {
+      return fixedDomains[metric];
+    } else {
+      // relative: monthly min/max
+      const vals = states.map(s => {
+        const r = rec(month, +s.id);
+        return r ? r[metric] : null;
+      }).filter(v => v != null && isFinite(v));
+      return vals.length ? [d3.min(vals), d3.max(vals)] : [0, 1];
+    }
+  }
+
   function render(){
     const month = months[+monthRange.node().value];
     const metric = metricSel.node().value;
+    const mode = scaleMode.node().value;
     monthLabel.text(month);
 
     // quantile scale gives good "heatmap" separation under skewed distributions
-    const vals = states.map(s => {
-      const r = rec(month, +s.id);
-      return r ? r[metric] : null;
-    }).filter(v => v!=null && isFinite(v));
-    const scale = d3.scaleQuantile().domain(vals.length?vals:[0,1]).range(d3.range(9).map(i=>ramp(i/8)));
-    drawLegend(scale, metric, month);
+    const domain = getDomain(metric, month, mode);
+    const scale = d3.scaleQuantile().domain(domain.length > 1 ? [domain[0], domain[1]] : [0,1]).range(d3.range(9).map(i=>ramp(i/8)));
+
+    drawLegend(scale, metric, month, mode);
 
     const sel = g.selectAll("path.state").data(states, d=>d.id);
 
@@ -329,26 +383,27 @@
       .attr('aria-label', d => `State ${d.properties && d.properties.name ? d.properties.name : d.id}`)
       .attr("fill", d => {
         const r = rec(month, +d.id);
-        return r ? scale(r[metric]) : "rgba(255,255,255,.06)";
+        return r && isFinite(r[metric]) ? scale(r[metric]) : "#3d444d";
       })
       .on("mousemove", (event, d) => {
         const r = rec(month, +d.id);
         const meta = META[metric];
-        const value = r ? meta.fmt(r[metric]) : "No data";
+        const value = r && isFinite(r[metric]) ? meta.fmt(r[metric]) : "Missing";
+        const statusColor = r && isFinite(r[metric]) ? "#58a6ff" : "#8b949e";
 
         tooltip
           .style("opacity", 1)
           .style("left", event.offsetX + "px")
           .style("top",  event.offsetY + "px")
           .html(`
-            <div style="font-weight:700;margin-bottom:4px;">
+            <div style="font-weight:700;margin-bottom:4px; color:${statusColor};">
               ${(r?.name)||"Unknown"} ${(r?.abbr)?`(${r.abbr})`:""}
             </div>
             <div class="muted">${month}</div>
             <div style="margin-top:6px;">
-              <div><span class="muted">${meta.label}:</span> <b>${value}</b></div>
-              ${r ? `<div><span class="muted">Offenses:</span> ${d3.format(",")(r.offenses)}</div>` : ``}
-              ${r ? `<div><span class="muted">Clearance rate:</span> ${((r.clearance_rate||0)*100).toFixed(1)}%</div>` : ``}
+              <div><span class="muted">${meta.label}:</span> <b style="color:${statusColor};">${value}</b></div>
+              ${r && isFinite(r[metric]) ? `<div><span class="muted">Offenses:</span> ${d3.format(",")(r.offenses)}</div>` : `<div style="color:#8b949e; font-style:italic;">No data for this state</div>`}
+              ${r && isFinite(r[metric]) ? `<div><span class="muted">Clearance rate:</span> ${((r.clearance_rate||0)*100).toFixed(1)}%</div>` : ``}
             </div>
           `);
 
@@ -396,16 +451,70 @@
       .transition().duration(220)
       .attr("fill", d => {
         const r = rec(month, +d.id);
-        return r ? scale(r[metric]) : "rgba(255,255,255,.06)";
+        return r && isFinite(r[metric]) ? scale(r[metric]) : "#3d444d";
       });
 
     sel.exit().remove();
 
+    // Render Top 10 / Bottom 10 rankings
+    renderRankings(month, metric);
+
     if(pinned != null) setPanel(month, pinned, true);
   }
 
+  function renderRankings(month, metric){
+    const data = states.map(s => {
+      const r = rec(month, +s.id);
+      return r && isFinite(r[metric]) ? {id: +s.id, name: r.name, abbr: r.abbr, value: r[metric]} : null;
+    }).filter(d => d != null);
+
+    data.sort((a,b) => b.value - a.value);
+    const top10 = data.slice(0, 10);
+    const bottom10 = data.slice(-10).reverse();
+
+    rankMonth.text(month);
+
+    // Top 10
+    topList.html(top10.map((d,i) => `
+      <div style="padding:4px 0; cursor:pointer; border-bottom:1px solid rgba(88,166,255,.1); padding:6px 0;" 
+           onclick="pinState(${d.id}, ${month === months[+monthRange.node().value]})">
+        <span style="color:rgba(255,123,114,.7); font-weight:600;">${i+1}.</span> ${d.abbr} 
+        <span style="float:right; color:rgba(139,148,158,.8);">${META[metric].fmt(d.value)}</span>
+      </div>
+    `).join(''));
+
+    // Bottom 10
+    bottomList.html(bottom10.map((d,i) => `
+      <div style="padding:4px 0; cursor:pointer; border-bottom:1px solid rgba(88,166,255,.1); padding:6px 0;" 
+           onclick="pinState(${d.id}, ${month === months[+monthRange.node().value]})">
+        <span style="color:rgba(88,166,255,.7); font-weight:600;">${i+1}.</span> ${d.abbr} 
+        <span style="float:right; color:rgba(139,148,158,.8);">${META[metric].fmt(d.value)}</span>
+      </div>
+    `).join(''));
+  }
+
+  // Exposed function for ranking list clicks
+  window.pinState = function(fips, isCurrent){
+    if(isCurrent){
+      const currentId = +fips;
+      pinned = (pinned === currentId) ? null : currentId;
+      if(pinned != null){
+        setPanel(months[+monthRange.node().value], pinned, true);
+      }else{
+        pTitle.text("Select a state");
+        pMonth.text("—");
+        pMetric.text("—");
+        pinHint.text("Not pinned");
+        kpis.html("");
+      }
+      // highlight state
+      svg.selectAll("path.state").style("stroke-width", d => (+d.id === pinned) ? "2.5px" : "1.5px");
+    }
+  };
+
   metricSel.on("change", render);
   monthRange.on("input", render);
+  scaleMode.on("change", render);
 
   render();
 
