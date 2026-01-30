@@ -11,57 +11,73 @@
 
   <style>
     :root{
-      --bg:#081224; --panel:#071428; --text:#f2f7fb; --muted:#c7d6ef;
-      --stroke:rgba(255,255,255,.18); --card:rgba(255,255,255,.04);
+      --bg:#0a0e1e; --panel:#0f1628; --text:#f0f4f9; --muted:#a8b4c7;
+      --stroke:rgba(255,255,255,.15); --card:rgba(255,255,255,.05);
+      --accent-low:#3b82f6; --accent-mid:#f59e0b; --accent-high:#ef4444;
     }
-    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
-    header{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px;
-      border-bottom:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.02); }
-    header h1{ margin:0; font-size:15px; }
-    header .hint{ color:var(--muted); font-size:12px; }
+    body{ margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; background:var(--bg); color:var(--text); }
+    header{ display:flex; justify-content:space-between; align-items:center; padding:16px 20px;
+      border-bottom:1px solid rgba(255,255,255,.08); background:rgba(0,0,0,.3); }
+    header h1{ margin:0; font-size:16px; font-weight:600; letter-spacing:0.5px; }
+    header .hint{ color:var(--muted); font-size:11px; letter-spacing:0.3px; }
 
-    .grid{ display:grid; grid-template-columns: 1fr 360px; gap:12px; padding:12px; height:calc(100vh - 49px); box-sizing:border-box; }
-    .left{ background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden; position:relative; display:flex; flex-direction:column; }
-    .controls{ display:flex; gap:10px; align-items:center; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.08); flex-wrap:wrap; }
-    label{ font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
-    select,input[type="range"]{ background:rgba(255,255,255,.06); color:var(--text); border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:6px 8px; outline:none; }
-    input[type="range"]{ padding:0; height:28px; }
-    .pill{ font-size:12px; color:var(--muted); padding:6px 10px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(255,255,255,.05); }
+    .grid{ display:grid; grid-template-columns: 1fr 400px; gap:16px; padding:16px; height:calc(100vh - 57px); box-sizing:border-box; }
+    .left{ background:rgba(255,255,255,.02); border:1px solid rgba(255,255,255,.08); border-radius:16px; overflow:hidden; position:relative; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,.3); }
+    .controls{ display:flex; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid rgba(255,255,255,.08); flex-wrap:wrap; background:rgba(255,255,255,.01); }
+    label{ font-size:11px; color:var(--muted); display:flex; align-items:center; gap:8px; font-weight:500; letter-spacing:0.3px; }
+    select,input[type="range"]{ background:rgba(255,255,255,.06); color:var(--text); border:1px solid rgba(255,255,255,.12); border-radius:8px; padding:7px 10px; outline:none; font-size:12px; }
+    select:hover,input[type="range"]:hover{ background:rgba(255,255,255,.08); }
+    input[type="range"]{ padding:0; height:6px; }
+    .pill{ font-size:12px; color:var(--text); padding:6px 12px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(255,255,255,.06); font-weight:500; }
 
     #mapWrap{ flex:1; position:relative; }
     svg{ width:100%; height:100%; display:block; }
 
     .tooltip{
-      position:absolute; pointer-events:none; opacity:0;
-      background:rgba(10,14,30,.92); border:1px solid rgba(255,255,255,.16);
-      border-radius:12px; padding:10px 12px; font-size:12px; min-width:180px;
+      position:absolute; pointer-events:none; opacity:0; z-index:1000;
+      background:rgba(10,14,30,.95); border:1px solid rgba(255,255,255,.18);
+      border-radius:12px; padding:12px 14px; font-size:12px; min-width:200px;
       transform:translate(-50%,-110%);
+      box-shadow:0 12px 32px rgba(0,0,0,.4);
+      backdrop-filter:blur(8px);
     }
-    .tooltip .muted{ color:var(--muted); font-size:11px; }
+    .tooltip .muted{ color:var(--muted); font-size:11px; margin-top:2px; }
+    .tooltip > div:first-child{ font-weight:600; margin-bottom:6px; letter-spacing:0.2px; }
 
     .legend{
-      position:absolute; top:12px; right:12px;
-      background:rgba(10,14,30,.55); border:1px solid rgba(255,255,255,.12);
-      border-radius:12px; padding:10px; font-size:12px; color:var(--muted);
-      backdrop-filter: blur(6px);
+      position:absolute; top:16px; right:16px;
+      background:rgba(10,14,30,.7); border:1px solid rgba(255,255,255,.14);
+      border-radius:12px; padding:12px; font-size:12px; color:var(--muted);
+      backdrop-filter:blur(8px);
+      box-shadow:0 8px 24px rgba(0,0,0,.3);
     }
-    .legend canvas{ display:block; margin-top:8px; border-radius:999px; border:1px solid rgba(255,255,255,.14); }
+    .legend > div:first-child{ font-weight:600; color:var(--text); margin-bottom:4px; }
+    .legend > div:nth-child(2){ font-size:10px; color:rgba(255,255,255,.5); margin-bottom:8px; }
+    .legend canvas{ display:block; margin-top:8px; border-radius:4px; border:1px solid rgba(255,255,255,.12); box-shadow:inset 0 2px 8px rgba(0,0,0,.2); }
 
-    .right{ background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px; overflow:auto; }
-    .card{ background:var(--card); border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px; margin-bottom:10px; }
+    .right{ background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:16px; overflow:auto; box-shadow:0 8px 32px rgba(0,0,0,.3); }
+    .right::-webkit-scrollbar { width:6px; }
+    .right::-webkit-scrollbar-track { background:rgba(255,255,255,.02); border-radius:999px; }
+    .right::-webkit-scrollbar-thumb { background:rgba(255,255,255,.1); border-radius:999px; }
+
+    .card{ background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:14px; margin-bottom:12px; }
+    .card:first-child{ border:1.5px solid rgba(255,255,255,.14); background:rgba(255,255,255,.04); }
     .row{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
-    h2{ margin:0; font-size:14px; }
-    .small{ color:var(--muted); font-size:12px; }
-    .kpis{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
-    .kpi{ background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px; }
-    .kpi .k{ color:var(--muted); font-size:11px; }
-    .kpi .v{ margin-top:4px; font-size:14px; }
+    h2{ margin:0; font-size:13px; font-weight:600; letter-spacing:0.3px; text-transform:uppercase; color:var(--text); }
+    .small{ color:var(--muted); font-size:11px; line-height:1.5; }
 
-    .state{ cursor:pointer; stroke:var(--stroke); stroke-width:.8; vector-effect:non-scaling-stroke; }
-    .state:hover{ stroke:rgba(255,255,255,.7); stroke-width:1.6; }
-    .state:focus{ outline:none; stroke:rgba(255,255,255,.9); stroke-width:2; }
+    .kpis{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+    .kpi{ background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.10); border-radius:10px; padding:12px; transition:all 0.2s ease; }
+    .kpi:hover{ background:rgba(255,255,255,.06); border-color:rgba(255,255,255,.14); }
+    .kpi .k{ color:var(--muted); font-size:10px; font-weight:500; letter-spacing:0.2px; text-transform:uppercase; }
+    .kpi .v{ margin-top:6px; font-size:16px; font-weight:600; }
 
-    @media (max-width: 980px){ .grid{ grid-template-columns:1fr; height:auto; } }
+    .state{ cursor:pointer; stroke:var(--stroke); stroke-width:.6; vector-effect:non-scaling-stroke; transition:all 0.15s ease; }
+    .state:hover{ stroke:rgba(255,255,255,.6); stroke-width:1.2; filter:brightness(1.2); }
+    .state:focus{ outline:none; stroke:rgba(255,255,255,.9); stroke-width:1.8; }
+
+    @media (max-width: 1200px){ .grid{ grid-template-columns: 1fr 350px; gap:14px; } }
+    @media (max-width: 900px){ .grid{ grid-template-columns:1fr; height:auto; } .right{ max-height:none; } }
   </style>
 </head>
 <body>
@@ -166,7 +182,20 @@
     clearance_rate: {label:"Clearance rate", fmt:d => (d*100).toFixed(1)+"%"},
     clearances: {label:"Clearances", fmt:d3.format(",")}
   };
-  const ramp = d3.interpolateViridis; // colorblind-friendly palette
+  
+  // Custom heatmap: low (blue) → medium (yellow) → high (red)
+  const ramp = t => {
+    if(t < 0.33) {
+      const s = t / 0.33;
+      return d3.interpolate("#3b82f6", "#f59e0b")(s);
+    } else if(t < 0.66) {
+      const s = (t - 0.33) / 0.33;
+      return d3.interpolate("#f59e0b", "#fbbf24")(s);
+    } else {
+      const s = (t - 0.66) / 0.34;
+      return d3.interpolate("#fbbf24", "#ef4444")(s);
+    }
+  };
 
   // ---------- Load map ----------
   const us = await d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
@@ -218,15 +247,16 @@
   // ---------- Legend (compact) ----------
   function drawLegend(scale, metric, month){
     legend.html("");
-    legend.append("div").text(META[metric].label);
-    legend.append("div").style("font-size","11px").style("margin-top","2px").text(month);
+    const title = legend.append("div").text(META[metric].label);
+    const subtitle = legend.append("div").text(month);
 
-    const canvas = legend.append("canvas").attr("width",160).attr("height",10).node();
+    const canvas = legend.append("canvas").attr("width",160).attr("height",12).node();
     const ctx = canvas.getContext("2d");
-    const img = ctx.createImageData(160,10);
+    const img = ctx.createImageData(160,12);
     for(let x=0; x<160; x++){
-      const c = d3.rgb(ramp(x/159));
-      for(let y=0; y<10; y++){
+      const color = ramp(x/159);
+      const c = d3.rgb(color);
+      for(let y=0; y<12; y++){
         const i=(y*160+x)*4;
         img.data[i]=c.r; img.data[i+1]=c.g; img.data[i+2]=c.b; img.data[i+3]=255;
       }
@@ -235,8 +265,8 @@
 
     const min = d3.min(scale.domain()), max = d3.max(scale.domain());
     const row = legend.append("div").style("display","flex").style("justify-content","space-between").style("gap","10px").style("margin-top","8px");
-    row.append("div").style("font-size","11px").text(META[metric].fmt(min));
-    row.append("div").style("font-size","11px").text(META[metric].fmt(max));
+    row.append("div").style("font-size","11px").style("font-weight","500").text("Lower: " + META[metric].fmt(min));
+    row.append("div").style("font-size","11px").style("font-weight","500").text("Higher: " + META[metric].fmt(max));
   }
 
   // ---------- Panel ----------
@@ -251,21 +281,23 @@
       kpis.html("");
       return;
     }
-    pTitle.text(`${r.name} (${r.abbr})`);
-    pMonth.text(month);
-    pMetric.text(META[metricSel.node().value].label);
-    pinHint.text(isPinned ? "Pinned" : "Preview");
+    pTitle.text(`${r.name}`).style("color", "var(--text)").style("font-size", "14px").style("font-weight", "600");
+    pMonth.style("color", "var(--muted)").style("font-size", "11px").text(month);
+    pMetric.text(META[metricSel.node().value].label).style("color", "var(--muted)").style("font-size", "11px").style("margin-top", "4px").style("display", "block");
+    pinHint.text(isPinned ? "📌 Pinned" : "👁 Preview").style("color", isPinned ? "#60a5fa" : "var(--muted)").style("font-weight", isPinned ? "500" : "400");
 
     const rows = [
-      {k:"Offenses", v:d3.format(",")(r.offenses)},
-      {k:"Clearances", v:d3.format(",")(r.clearances)},
-      {k:"Clearance rate", v:((r.clearance_rate||0)*100).toFixed(1)+"%"},
-      {k:"Offenses per 100k", v:d3.format(",.1f")(r.rate_per_100k)}
+      {k:"Offenses", v:d3.format(",")(r.offenses), color:"#3b82f6"},
+      {k:"Clearances", v:d3.format(",")(r.clearances), color:"#8b5cf6"},
+      {k:"Clearance rate", v:((r.clearance_rate||0)*100).toFixed(1)+"%", color:"#10b981"},
+      {k:"Per 100k", v:d3.format(",.1f")(r.rate_per_100k), color:"#f59e0b"}
     ];
     const sel = kpis.selectAll(".kpi").data(rows, d=>d.k);
     sel.enter().append("div").attr("class","kpi")
+      .style("border-left", d=>`3px solid ${d.color}`)
       .html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
-    sel.html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
+    sel.style("border-left", d=>`3px solid ${d.color}`)
+      .html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
     sel.exit().remove();
   }
 
@@ -387,8 +419,8 @@
     const data = aggregateUSMonth(raw);
     const svgTs = d3.select('#tsSvg');
     svgTs.selectAll('*').remove();
-    const w = +svgTs.attr('width') - 40, h = +svgTs.attr('height') - 30;
-    const g = svgTs.append('g').attr('transform','translate(36,8)');
+    const w = +svgTs.attr('width') - 48, h = +svgTs.attr('height') - 32;
+    const g = svgTs.append('g').attr('transform','translate(40,8)');
 
     const parse = d3.timeParse('%Y-%m');
     data.forEach(d=>d.dt = parse(d.month));
@@ -399,21 +431,36 @@
     const lineInc = d3.line().x(d=>x(d.dt)).y(d=>y(d.incidents)).curve(d3.curveMonotoneX);
     const lineClr = d3.line().x(d=>x(d.dt)).y(d=>y(d.clearances)).curve(d3.curveMonotoneX);
 
-    g.append('path').datum(data).attr('d', lineInc).attr('fill','none').attr('stroke','#4C78A8').attr('stroke-width',2);
-    g.append('path').datum(data).attr('d', lineClr).attr('fill','none').attr('stroke','#E45756').attr('stroke-width',2).style('stroke-dasharray','4 2');
+    g.append('path').datum(data).attr('d', lineInc).attr('fill','none').attr('stroke','#3b82f6').attr('stroke-width',2.5).attr('opacity',0.9);
+    g.append('path').datum(data).attr('d', lineClr).attr('fill','none').attr('stroke','#10b981').attr('stroke-width',2.5).attr('opacity',0.9).style('stroke-dasharray','5 3');
+
+    // grid lines
+    g.selectAll('.grid-y').data(y.ticks(3)).enter()
+      .append('line')
+      .attr('class','grid-y')
+      .attr('x1',0).attr('x2',w)
+      .attr('y1',d=>y(d)).attr('y2',d=>y(d))
+      .attr('stroke','rgba(255,255,255,.05)').attr('stroke-width',1);
 
     // axes
-    const xAxis = d3.axisBottom(x).ticks(4).tickFormat(d3.timeFormat('%Y-%m'));
+    const xAxis = d3.axisBottom(x).ticks(3).tickFormat(d3.timeFormat('%Y-%m'));
     const yAxis = d3.axisLeft(y).ticks(3).tickFormat(d3.format(','));
-    g.append('g').attr('transform',`translate(0,${h})`).call(xAxis).selectAll('text').style('font-size','10px');
-    g.append('g').call(yAxis).selectAll('text').style('font-size','10px');
+    g.append('g').attr('transform',`translate(0,${h})`).call(xAxis)
+      .selectAll('text').style('font-size','10px').style('fill','rgba(255,255,255,.6)');
+    g.append('g').call(yAxis)
+      .selectAll('text').style('font-size','10px').style('fill','rgba(255,255,255,.6)');
 
-    // legend small
-    const legend = svgTs.append('g').attr('transform','translate(8,8)');
-    legend.append('rect').attr('width',8).attr('height',8).attr('fill','#4C78A8');
-    legend.append('text').attr('x',12).attr('y',8).text('Incidents').style('font-size','10px').attr('fill', 'white');
-    legend.append('rect').attr('x',80).attr('width',8).attr('height',8).attr('fill','#E45756');
-    legend.append('text').attr('x',96).attr('y',8).text('Clearances').style('font-size','10px').attr('fill', 'white');
+    // axis labels
+    g.selectAll('.axis-line').data([0]).enter().append('line')
+      .attr('class','axis-line').attr('x1',0).attr('x2',w)
+      .attr('y1',h).attr('y2',h).attr('stroke','rgba(255,255,255,.15)').attr('stroke-width',1);
+
+    // legend
+    const legend = svgTs.append('g').attr('transform','translate(10,8)');
+    legend.append('rect').attr('width',10).attr('height',10).attr('fill','#3b82f6').attr('rx','2');
+    legend.append('text').attr('x',14).attr('y',9).text('Incidents').style('font-size','10px').attr('fill', '#d1d5db');
+    legend.append('rect').attr('x',90).attr('width',10).attr('height',10).attr('fill','#10b981').attr('rx','2');
+    legend.append('text').attr('x',104).attr('y',9).text('Clearances').style('font-size','10px').attr('fill', '#d1d5db');
   }
 
   // ---------- Demographics (sample static data from user) ----------
@@ -428,38 +475,64 @@
 
   function renderAgeChart(){
     const svgA = d3.select('#ageSvg'); svgA.selectAll('*').remove();
-    const margin = {l:80,t:8,r:8,b:24};
+    const margin = {l:70,t:8,r:8,b:20};
     const w = +svgA.attr('width') - margin.l - margin.r;
     const h = +svgA.attr('height') - margin.t - margin.b;
     const g = svgA.append('g').attr('transform',`translate(${margin.l},${margin.t})`);
 
-    const x = d3.scaleLinear().domain([0,d3.max(offenderAge,d=>d.v)]).range([0,w]);
-    const y = d3.scaleBand().domain(offenderAge.map(d=>d.age)).range([0,h]).padding(0.15);
+    const sorted = [...offenderAge].sort((a,b)=>b.v-a.v);
+    const x = d3.scaleLinear().domain([0,d3.max(sorted,d=>d.v)]).range([0,w]);
+    const y = d3.scaleBand().domain(sorted.map(d=>d.age)).range([0,h]).padding(0.2);
 
-    g.selectAll('rect').data(offenderAge).enter().append('rect')
+    const gradient = svgA.append('defs').append('linearGradient').attr('id','ageGrad').attr('x1','0%').attr('x2','100%');
+    gradient.append('stop').attr('offset','0%').attr('stop-color','#3b82f6');
+    gradient.append('stop').attr('offset','100%').attr('stop-color','#06b6d4');
+
+    g.selectAll('rect').data(sorted).enter().append('rect')
       .attr('y',d=>y(d.age)).attr('height',y.bandwidth())
-      .attr('x',0).attr('width',d=>x(d.v)).attr('fill','#6BAED6');
+      .attr('x',0).attr('width',d=>x(d.v)).attr('fill','url(#ageGrad)').attr('rx','4');
 
-    g.append('g').call(d3.axisLeft(y)).selectAll('text').style('font-size','11px');
-    g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(3).tickFormat(d3.format('.2s'))).selectAll('text').style('font-size','10px');
+    // value labels
+    g.selectAll('.label').data(sorted).enter().append('text')
+      .attr('class','label')
+      .attr('y',d=>y(d.age)+y.bandwidth()/2)
+      .attr('x',d=>x(d.v)+4)
+      .attr('dy','0.35em')
+      .text(d=>d3.format('.0s')(d.v))
+      .style('font-size','9px').style('fill','rgba(255,255,255,.7)').attr('font-weight','500');
+
+    g.append('g').call(d3.axisLeft(y)).selectAll('text').style('font-size','10px').style('fill','rgba(255,255,255,.7)');
+    g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(3).tickFormat(d3.format('.0s'))).selectAll('text').style('font-size','9px').style('fill','rgba(255,255,255,.6)');
   }
 
   function renderSexChart(){
     const svgS = d3.select('#sexSvg'); svgS.selectAll('*').remove();
     const w = +svgS.attr('width'), h = +svgS.attr('height');
-    const radius = Math.min(w,h)/2 - 8;
-    const g = svgS.append('g').attr('transform',`translate(${w/2},${h/2})`);
+    const radius = Math.min(w,h)/2 - 16;
+    const g = svgS.append('g').attr('transform',`translate(${w/2-40},${h/2})`);
 
     const pie = d3.pie().value(d=>d.v)(offenderSex);
-    const arc = d3.arc().innerRadius(radius*0.45).outerRadius(radius);
-    const color = d3.scaleOrdinal().domain(offenderSex.map(d=>d.sex)).range(['#4C78A8','#F28E2B','#E15759','#76B7B2']);
+    const arc = d3.arc().innerRadius(radius*0.5).outerRadius(radius);
+    const color = d3.scaleOrdinal()
+      .domain(offenderSex.map(d=>d.sex))
+      .range(['#3b82f6','#f59e0b','#ef4444','#8b5cf6']);
 
-    g.selectAll('path').data(pie).enter().append('path').attr('d',arc).attr('fill',d=>color(d.data.sex)).attr('stroke','rgba(0,0,0,0.1)');
+    g.selectAll('path').data(pie).enter().append('path')
+      .attr('d',arc)
+      .attr('fill',d=>color(d.data.sex))
+      .attr('stroke','rgba(0,0,0,.2)')
+      .attr('stroke-width',1.5)
+      .style('filter','drop-shadow(0 2px 4px rgba(0,0,0,.2))');
+
     // legend
     const lg = svgS.append('g').attr('transform','translate(8,8)');
     offenderSex.forEach((s,i)=>{
-      lg.append('rect').attr('x',0).attr('y',i*14).attr('width',8).attr('height',8).attr('fill',color(s.sex));
-      lg.append('text').attr('x',12).attr('y',i*14+8).text(`${s.sex} (${d3.format(',')(s.v)})`).style('font-size','11px').attr('fill','white');
+      const pct = ((s.v / d3.sum(offenderSex, d=>d.v))*100).toFixed(0);
+      lg.append('rect').attr('x',0).attr('y',i*16).attr('width',10).attr('height',10)
+        .attr('fill',color(s.sex)).attr('rx','2');
+      lg.append('text').attr('x',14).attr('y',i*16+8)
+        .text(`${s.sex} (${pct}%)`)
+        .style('font-size','10px').style('fill','rgba(255,255,255,.8)').attr('font-weight','500');
     });
   }
   // ---------- Sankey (from aggregated data) ----------
@@ -469,28 +542,32 @@
 
     d3.json('data/sankey_us.json').then(data=>{
       if(!data || !data.nodes || !data.links) return;
-      const sankeyGen = d3.sankey().nodeId(d=>d.id).nodeWidth(10).nodePadding(6).extent([[1,1],[width-1,height-1]]);
+      const sankeyGen = d3.sankey().nodeId(d=>d.id).nodeWidth(12).nodePadding(40).extent([[1,1],[width-1,height-1]]);
       // ensure nodes array of objects
       const nodesIn = data.nodes.map(d => ({id: d.id}));
       const linksIn = data.links.map(d => ({source:d.source, target:d.target, value:+d.value}));
       const graph = sankeyGen({nodes: nodesIn, links: linksIn});
 
-      const color = d3.scaleOrdinal(d3.schemeTableau10);
+      const colorScale = d3.scaleOrdinal(d3.schemePaired);
 
       const g = svgS.append('g');
       // links behind
       g.append('g').selectAll('path').data(graph.links).enter().append('path')
         .attr('d', d3.sankeyLinkHorizontal())
         .attr('fill','none')
-        .attr('stroke', d=>color(d.source.id))
+        .attr('stroke', (d,i)=>colorScale(i))
         .attr('stroke-width', d=>Math.max(1,d.width))
-        .attr('opacity',0.85);
+        .attr('opacity',0.4)
+        .style('filter','drop-shadow(0 1px 2px rgba(0,0,0,.1))');
 
       // nodes
       g.append('g').selectAll('rect').data(graph.nodes).enter().append('rect')
         .attr('x', d=>d.x0).attr('y', d=>d.y0).attr('width', d=>d.x1-d.x0).attr('height', d=>Math.max(1,d.y1-d.y0))
-        .attr('fill', d=>color(d.id)).attr('stroke','rgba(0,0,0,0.25)')
-        .append('title').text(d=>d.id + '\n' + d.value);
+        .attr('fill', (d,i)=>colorScale(i))
+        .attr('rx','3')
+        .attr('stroke','rgba(255,255,255,.2)')
+        .attr('stroke-width',1)
+        .append('title').text(d=>d.id + '\n' + d3.format(',')(d.value));
 
       g.append('g').selectAll('text').data(graph.nodes).enter().append('text')
         .attr('x', d=> d.x0 < width/2 ? d.x1 + 6 : d.x0 - 6)
@@ -498,7 +575,9 @@
         .attr('dy','0.35em')
         .attr('text-anchor', d=> d.x0 < width/2 ? 'start' : 'end')
         .text(d=>d.id)
-        .style('font-size','10px').attr('fill','white');
+        .style('font-size','9px')
+        .style('font-weight','500')
+        .attr('fill','rgba(255,255,255,.85)');
     });
   }
 
