@@ -474,41 +474,59 @@
 
     rankMonth.text(month);
 
+    const itemStyle = `
+      padding:8px 6px;
+      cursor:pointer;
+      border-bottom:1px solid rgba(88,166,255,.08);
+      border-radius:4px;
+      margin-bottom:2px;
+      transition:all 0.2s ease;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    `;
+
     // Top 10
     topList.html(top10.map((d,i) => `
-      <div style="padding:4px 0; cursor:pointer; border-bottom:1px solid rgba(88,166,255,.1); padding:6px 0;" 
-           onclick="pinState(${d.id}, ${month === months[+monthRange.node().value]})">
-        <span style="color:rgba(255,123,114,.7); font-weight:600;">${i+1}.</span> ${d.abbr} 
-        <span style="float:right; color:rgba(139,148,158,.8);">${META[metric].fmt(d.value)}</span>
+      <div style="${itemStyle} background:rgba(255,123,114,.04);" 
+           class="ranking-item"
+           onclick="window.pinState(${d.id}, true)">
+        <span><span style="color:#ff7b72; font-weight:700;">${i+1}</span> ${d.abbr}</span>
+        <span style="color:rgba(255,123,114,.8); font-weight:600; font-size:10px;">${META['${metric}'].fmt(d.value)}</span>
       </div>
     `).join(''));
 
     // Bottom 10
     bottomList.html(bottom10.map((d,i) => `
-      <div style="padding:4px 0; cursor:pointer; border-bottom:1px solid rgba(88,166,255,.1); padding:6px 0;" 
-           onclick="pinState(${d.id}, ${month === months[+monthRange.node().value]})">
-        <span style="color:rgba(88,166,255,.7); font-weight:600;">${i+1}.</span> ${d.abbr} 
-        <span style="float:right; color:rgba(139,148,158,.8);">${META[metric].fmt(d.value)}</span>
+      <div style="${itemStyle} background:rgba(88,166,255,.04);" 
+           class="ranking-item"
+           onclick="window.pinState(${d.id}, true)">
+        <span><span style="color:#58a6ff; font-weight:700;">${i+1}</span> ${d.abbr}</span>
+        <span style="color:rgba(88,166,255,.8); font-weight:600; font-size:10px;">${META['${metric}'].fmt(d.value)}</span>
       </div>
     `).join(''));
+
+    // Add hover effects
+    d3.selectAll(".ranking-item")
+      .on("mouseover", function(){ d3.select(this).style("background", d3.select(this).style("color").includes("255,123") ? "rgba(255,123,114,.08)" : "rgba(88,166,255,.08)"); })
+      .on("mouseout", function(){ d3.select(this).style("background", d3.select(this).style("color").includes("255,123") ? "rgba(255,123,114,.04)" : "rgba(88,166,255,.04)"); });
   }
 
   // Exposed function for ranking list clicks
   window.pinState = function(fips, isCurrent){
-    if(isCurrent){
-      const currentId = +fips;
-      pinned = (pinned === currentId) ? null : currentId;
-      if(pinned != null){
-        setPanel(months[+monthRange.node().value], pinned, true);
-      }else{
-        pTitle.text("Select a state");
-        pMonth.text("—");
-        pMetric.text("—");
-        pinHint.text("Not pinned");
-        kpis.html("");
-      }
-      // highlight state
+    const currentId = +fips;
+    pinned = (pinned === currentId) ? null : currentId;
+    if(pinned != null){
+      setPanel(months[+monthRange.node().value], pinned, true);
+      // highlight state on map
       svg.selectAll("path.state").style("stroke-width", d => (+d.id === pinned) ? "2.5px" : "1.5px");
+    }else{
+      pTitle.text("Select a state");
+      pMonth.text("—");
+      pMetric.text("—");
+      pinHint.text("Not pinned");
+      kpis.html("");
+      svg.selectAll("path.state").style("stroke-width", "1.5px");
     }
   };
 
