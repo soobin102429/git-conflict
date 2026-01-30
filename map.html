@@ -834,10 +834,17 @@
 
   // Initial insight render - called when data/month/pinned changes
   window.renderInsights = function(){
+    console.log("[renderInsights] Called");
     setTimeout(() => {
-      updateScatterChart();
-      updateHeatmapChart();
-      updateStackedChart();
+      try {
+        updateScatterChart();
+      } catch(e) { console.error("[Scatter]", e); }
+      try {
+        updateHeatmapChart();
+      } catch(e) { console.error("[Heatmap]", e); }
+      try {
+        updateStackedChart();
+      } catch(e) { console.error("[Stacked]", e); }
     }, 50);
   };
 
