@@ -597,8 +597,10 @@
     // Radar chart
     renderRadar(month, fips);
     
-    // Render insights tab
-    renderInsights();
+    // Render insights charts (both sidebar + below-map)
+    renderTimeSeries(); // Sidebar time series
+    updateTrendChartBelow(); // Below-map trend
+    renderInsights(); // Scatter, Heatmap, Stacked
   }
 
   // ---------- Render ----------
@@ -1151,6 +1153,110 @@
     return arr;
   }
 
+  // ---------- NEW MODULAR INSIGHTS CHARTS ----------
+  // TREND CHART - Below map version (reusing renderTimeSeries logic)
+  function updateTrendChartBelow(){
+    const container = d3.select("#trendChartContainer");
+    container.html("");
+    
+    // Get pinned state data if available
+    let selectedStateData = null;
+    if(pinned != null){
+      selectedStateData = months.map(month => {
+        const r = rec(month, pinned);
+        return r ? {month, offenses: r.offenses, clearances: r.clearances, rate: r.rate_per_100k, clearRate: r.clearance_rate} : null;
+      }).filter(d => d != null);
+    }
+
+    const usData = aggregateUSMonth(raw);
+    
+    // Pre-calculate US clearance rates
+    const usClearRates = months.map(month => {
+      const monthData = raw.filter(r => r.month === month);
+      const totalClearances = d3.sum(monthData, d => d.clearances);
+      const totalOffenses = d3.sum(monthData, d => d.offenses);
+      return {month, clearRate: totalOffenses ? totalClearances / totalOffenses : 0};
+    });
+    
+    usData.forEach((d, i) => {
+      d.clearRate = usClearRates[i]?.clearRate || 0;
+    });
+
+    const containerEl = document.getElementById("trendChartContainer");
+    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    const margin = {l: 50, t: 20, r: 20, b: 40};
+    const w = Math.max(500, containerWidth - margin.l - margin.r);
+    const h = 260;
+
+    const svg = container.append("svg")
+      .attr("width", containerWidth)
+      .attr("height", h + margin.t + margin.b);
+
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+
+    const parse = d3.timeParse('%Y-%m');
+    usData.forEach(d=>d.dt = parse(d.month));
+    if(selectedStateData) selectedStateData.forEach(d=>d.dt = parse(d.month));
+
+    // Scale
+    const maxRate = Math.max(
+      d3.max(usData, d => d.incidents / (d.population || 1) * 100000) || 0,
+      selectedStateData ? d3.max(selectedStateData, d => d.rate) : 0
+    );
+    
+    const maxClearRate = 1;
+    const x = d3.scaleTime().domain(d3.extent(usData,d=>d.dt)).range([0,w]);
+    const yOffense = d3.scaleLinear().domain([0, maxRate]).nice().range([h,0]);
+    const yClear = d3.scaleLinear().domain([0, maxClearRate]).range([h,0]);
+
+    const lineStateOffense = d3.line().x(d=>x(d.dt)).y(d=>yOffense(d.rate)).curve(d3.curveMonotoneX);
+    const lineUSOffense = d3.line().x(d=>x(d.dt)).y(d=>yOffense((d.incidents / (d.population || 1)) * 100000)).curve(d3.curveMonotoneX);
+    const lineStateClear = d3.line().x(d=>x(d.dt)).y(d=>yClear(d.clearRate)).curve(d3.curveMonotoneX);
+    const lineUSClear = d3.line().x(d=>x(d.dt)).y(d=>yClear(d.clearRate)).curve(d3.curveMonotoneX);
+
+    // Grid
+    g.selectAll('.grid-y').data(yOffense.ticks(3)).enter()
+      .append('line')
+      .attr('class','grid-y')
+      .attr('x1',0).attr('x2',w)
+      .attr('y1',d=>yOffense(d)).attr('y2',d=>yOffense(d))
+      .attr('stroke','rgba(88,166,255,.05)').attr('stroke-width',1).attr('stroke-dasharray','2 2');
+
+    // Lines: US (dashed)
+    g.append('path').datum(usData).attr('d', lineUSOffense).attr('fill','none').attr('stroke','#8b949e').attr('stroke-width',2).attr('opacity',0.6).style('stroke-dasharray','4 2');
+    g.append('path').datum(usData).attr('d', lineUSClear).attr('fill','none').attr('stroke','#10b981').attr('stroke-width',2).attr('opacity',0.4).style('stroke-dasharray','4 2');
+    
+    // Lines: Selected state (solid)
+    if(selectedStateData){
+      g.append('path').datum(selectedStateData).attr('d', lineStateOffense).attr('fill','none').attr('stroke','#ff7b72').attr('stroke-width',2.5).attr('opacity',0.95);
+      g.append('path').datum(selectedStateData).attr('d', lineStateClear).attr('fill','none').attr('stroke','#10b981').attr('stroke-width',2.5).attr('opacity',0.95);
+    }
+
+    // Axes
+    const xAxis = d3.axisBottom(x).ticks(4).tickFormat(d3.timeFormat('%Y-%m'));
+    const yAxis = d3.axisLeft(yOffense).ticks(4).tickFormat(d3.format(','));
+    g.append('g').attr('transform',`translate(0,${h})`).call(xAxis)
+      .selectAll('text').style('font-size','11px').style('fill','rgba(139,148,158,.7)');
+    g.append('g').call(yAxis)
+      .selectAll('text').style('font-size','11px').style('fill','rgba(139,148,158,.7)');
+
+    // Axis lines
+    g.append('line').attr('x1',-5).attr('x2',w).attr('y1',h).attr('y2',h).attr('stroke','rgba(88,166,255,.15)').attr('stroke-width',1);
+    g.append('line').attr('x1',0).attr('x2',0).attr('y1',0).attr('y2',h).attr('stroke','rgba(88,166,255,.15)').attr('stroke-width',1);
+
+    // Legend
+    const legend = svg.append('g').attr('transform',`translate(${margin.l},8)`);
+    let legendY = 0;
+    if(selectedStateData){
+      legend.append('circle').attr('r',3).attr('fill','#ff7b72').attr('cy', legendY);
+      legend.append('text').attr('x',10).attr('y',legendY+4).text('Selected State').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
+      legendY += 16;
+    }
+    legend.append('circle').attr('r',3).attr('fill','#8b949e').attr('cy', legendY);
+    legend.append('text').attr('x',10).attr('y',legendY+4).text('US Average').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
+  }
+  // ---------- End MODULAR INSIGHTS CHARTS ----------
+  
   function renderTimeSeries(){
     // Get pinned state data if available
     let selectedStateData = null;
