@@ -389,6 +389,97 @@
     };
   }
 
+  // ---------- Radar chart for state profile ----------
+  function renderRadar(month, fips){
+    const svg = d3.select('#radarSvg');
+    svg.selectAll('*').remove();
+    
+    const width = +svg.attr('width');
+    const height = +svg.attr('height');
+    const radius = Math.min(width, height) / 2 - 30;
+    const center = {x: width / 2, y: height / 2};
+
+    const scores = calculateZScores(month, fips);
+    if(!scores) return;
+
+    // Normalize scores to 0-1 range for visualization
+    const normalize = (z) => Math.max(0, Math.min(1, (z + 2) / 4));
+
+    const axes = [
+      {name: 'Rate/100k', value: normalize(scores.rateZ), color: '#ff7b72'},
+      {name: 'Trend ↑', value: normalize(scores.trendZ), color: '#ffd657'},
+      {name: 'Clearance', value: 1 - scores.clearInv, color: '#10b981'},
+      {name: 'Firearm', value: scores.firearm, color: '#58a6ff'},
+      {name: 'Stranger', value: scores.stranger, color: '#79c0ff'}
+    ];
+
+    const angleSlice = (Math.PI * 2) / axes.length;
+    const g = svg.append('g').attr('transform', `translate(${center.x},${center.y})`);
+
+    // Draw concentric circles (grid)
+    for(let i = 1; i <= 3; i++){
+      const r = (radius / 3) * i;
+      g.append('circle')
+        .attr('r', r)
+        .attr('fill', 'none')
+        .attr('stroke', 'rgba(88,166,255,.1)')
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '2 2');
+    }
+
+    // Draw axes
+    axes.forEach((axis, i) => {
+      const angle = angleSlice * i - Math.PI / 2;
+      const x = Math.cos(angle) * radius;
+      const y = Math.sin(angle) * radius;
+      
+      g.append('line')
+        .attr('x1', 0).attr('y1', 0)
+        .attr('x2', x).attr('y2', y)
+        .attr('stroke', 'rgba(88,166,255,.15)')
+        .attr('stroke-width', 1);
+
+      // Labels
+      const labelR = radius + 20;
+      const lx = Math.cos(angle) * labelR;
+      const ly = Math.sin(angle) * labelR;
+      g.append('text')
+        .attr('x', lx).attr('y', ly)
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .text(axis.name)
+        .style('font-size', '10px')
+        .style('fill', 'rgba(139,148,158,.8)')
+        .style('font-weight', '500');
+    });
+
+    // Draw polygon (profile)
+    const points = axes.map((axis, i) => {
+      const angle = angleSlice * i - Math.PI / 2;
+      const r = axis.value * radius;
+      return {x: Math.cos(angle) * r, y: Math.sin(angle) * r, color: axis.color};
+    });
+
+    // Fill
+    const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
+    g.append('path')
+      .attr('d', pathData)
+      .attr('fill', 'rgba(88,166,255,.15)')
+      .attr('stroke', '#58a6ff')
+      .attr('stroke-width', 2);
+
+    // Nodes
+    points.forEach((p, i) => {
+      g.append('circle')
+        .attr('cx', p.x).attr('cy', p.y)
+        .attr('r', 4)
+        .attr('fill', p.color)
+        .attr('stroke', 'rgba(13,17,23,.8)')
+        .attr('stroke-width', 1)
+        .style('filter', 'drop-shadow(0 1px 3px rgba(0,0,0,.2))');
+    });
+  }
+
   function setPanel(month, fips, isPinned){
     const r = rec(month, fips);
     if(!r){
@@ -871,97 +962,6 @@
   }
 
   renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey();
-
-  // ---------- Radar chart for state profile ----------
-  function renderRadar(month, fips){
-    const svg = d3.select('#radarSvg');
-    svg.selectAll('*').remove();
-    
-    const width = +svg.attr('width');
-    const height = +svg.attr('height');
-    const radius = Math.min(width, height) / 2 - 30;
-    const center = {x: width / 2, y: height / 2};
-
-    const scores = calculateZScores(month, fips);
-    if(!scores) return;
-
-    // Normalize scores to 0-1 range for visualization
-    const normalize = (z) => Math.max(0, Math.min(1, (z + 2) / 4));
-
-    const axes = [
-      {name: 'Rate/100k', value: normalize(scores.rateZ), color: '#ff7b72'},
-      {name: 'Trend ↑', value: normalize(scores.trendZ), color: '#ffd657'},
-      {name: 'Clearance', value: 1 - scores.clearInv, color: '#10b981'},
-      {name: 'Firearm', value: scores.firearm, color: '#58a6ff'},
-      {name: 'Stranger', value: scores.stranger, color: '#79c0ff'}
-    ];
-
-    const angleSlice = (Math.PI * 2) / axes.length;
-    const g = svg.append('g').attr('transform', `translate(${center.x},${center.y})`);
-
-    // Draw concentric circles (grid)
-    for(let i = 1; i <= 3; i++){
-      const r = (radius / 3) * i;
-      g.append('circle')
-        .attr('r', r)
-        .attr('fill', 'none')
-        .attr('stroke', 'rgba(88,166,255,.1)')
-        .attr('stroke-width', 1)
-        .attr('stroke-dasharray', '2 2');
-    }
-
-    // Draw axes
-    axes.forEach((axis, i) => {
-      const angle = angleSlice * i - Math.PI / 2;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
-      
-      g.append('line')
-        .attr('x1', 0).attr('y1', 0)
-        .attr('x2', x).attr('y2', y)
-        .attr('stroke', 'rgba(88,166,255,.15)')
-        .attr('stroke-width', 1);
-
-      // Labels
-      const labelR = radius + 20;
-      const lx = Math.cos(angle) * labelR;
-      const ly = Math.sin(angle) * labelR;
-      g.append('text')
-        .attr('x', lx).attr('y', ly)
-        .attr('text-anchor', 'middle')
-        .attr('dy', '0.35em')
-        .text(axis.name)
-        .style('font-size', '10px')
-        .style('fill', 'rgba(139,148,158,.8)')
-        .style('font-weight', '500');
-    });
-
-    // Draw polygon (profile)
-    const points = axes.map((axis, i) => {
-      const angle = angleSlice * i - Math.PI / 2;
-      const r = axis.value * radius;
-      return {x: Math.cos(angle) * r, y: Math.sin(angle) * r, color: axis.color};
-    });
-
-    // Fill
-    const pathData = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + ' Z';
-    g.append('path')
-      .attr('d', pathData)
-      .attr('fill', 'rgba(88,166,255,.15)')
-      .attr('stroke', '#58a6ff')
-      .attr('stroke-width', 2);
-
-    // Nodes
-    points.forEach((p, i) => {
-      g.append('circle')
-        .attr('cx', p.x).attr('cy', p.y)
-        .attr('r', 4)
-        .attr('fill', p.color)
-        .attr('stroke', 'rgba(13,17,23,.8)')
-        .attr('stroke-width', 1)
-        .style('filter', 'drop-shadow(0 1px 3px rgba(0,0,0,.2))');
-    });
-  }
 })();
 
 </script>
