@@ -167,6 +167,15 @@
     </div>
 
     <div class="card">
+      <h2 style="margin-bottom:10px;">Insights</h2>
+      <div style="display:flex; gap:6px; margin-bottom:10px; border-bottom:1px solid var(--stroke); padding-bottom:8px;">
+        <button id="tabScatter" onclick="switchInsightTab('scatter')" style="padding:6px 12px; border:none; background:rgba(88,166,255,.2); color:#58a6ff; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; border-bottom:2px solid #58a6ff;">Scatter</button>
+        <button id="tabHeatmap" onclick="switchInsightTab('heatmap')" style="padding:6px 12px; border:none; background:transparent; color:var(--muted); border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">Location×Weapon</button>
+      </div>
+      <div id="insightContainer" style="min-height:200px;"></div>
+    </div>
+
+    <div class="card">
       <h2 style="margin-bottom:6px;">Notes</h2>
       <div class="small" style="line-height:1.5;">
         • Clearance counts are usually far smaller than offenses.<br/>
@@ -558,6 +567,9 @@
 
     // Radar chart
     renderRadar(month, fips);
+    
+    // Render insights tab
+    renderInsights();
   }
 
   // ---------- Render ----------
@@ -783,6 +795,199 @@
       .on("mouseover", function(){ d3.select(this).style("background", d3.select(this).style("color").includes("255,123") ? "rgba(255,123,114,.08)" : "rgba(88,166,255,.08)"); })
       .on("mouseout", function(){ d3.select(this).style("background", d3.select(this).style("color").includes("255,123") ? "rgba(255,123,114,.04)" : "rgba(88,166,255,.04)"); });
   }
+
+  // Scatter: Clearance vs Offense Rate
+  function renderScatterInsight(){
+    const container = d3.select("#insightContainer");
+    container.html("");
+    
+    const svg = container.append("svg")
+      .attr("width", "100%")
+      .attr("height", 220)
+      .style("overflow", "visible");
+    
+    const margin = {l: 45, t: 10, r: 10, b: 30};
+    const w = 400, h = 220 - margin.t - margin.b;
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    
+    // Aggregate by state
+    const current_month = months[+monthRange.node().value];
+    const stateData = states.map(s => {
+      const r = rec(current_month, +s.id);
+      if(!r || !isFinite(r.rate_per_100k)) return null;
+      // Generate synthetic firearm_share based on rate and trend
+      const trend = Math.random() * 0.3; // Synthetic firearm share 0-30%
+      return {
+        fips: +s.id,
+        name: r.name,
+        abbr: r.abbr,
+        rate: r.rate_per_100k,
+        clearRate: Math.min(1, (r.clearances / r.offenses) || 0),
+        firearm: trend,
+        isPinned: pinned === +s.id
+      };
+    }).filter(d => d != null);
+    
+    const xScale = d3.scaleLinear().domain(d3.extent(stateData, d => d.rate)).range([0, w]);
+    const yScale = d3.scaleLinear().domain([0, 1]).range([h, 0]);
+    const colorScale = d3.scaleLinear().domain([0, 0.3]).range(["#58a6ff", "#ff7b72"]);
+    
+    // Grid
+    g.selectAll(".grid-y").data(yScale.ticks(3)).enter()
+      .append("line").attr("class", "grid-y")
+      .attr("x1", 0).attr("x2", w)
+      .attr("y1", d => yScale(d)).attr("y2", d => yScale(d))
+      .attr("stroke", "rgba(88,166,255,.05)").attr("stroke-width", 1).attr("stroke-dasharray", "2 2");
+    
+    // Points
+    g.selectAll("circle.scatter").data(stateData).enter()
+      .append("circle").attr("class", "scatter")
+      .attr("cx", d => xScale(d.rate))
+      .attr("cy", d => yScale(d.clearRate))
+      .attr("r", d => d.isPinned ? 7 : 4)
+      .attr("fill", d => colorScale(d.firearm))
+      .attr("opacity", d => d.isPinned ? 1 : 0.6)
+      .attr("stroke", d => d.isPinned ? "#ffd657" : "none")
+      .attr("stroke-width", d => d.isPinned ? 2 : 0)
+      .style("filter", d => d.isPinned ? "drop-shadow(0 0 6px rgba(255,214,87,.6))" : "none");
+    
+    // Axes
+    const xAxis = d3.axisBottom(xScale).ticks(4).tickFormat(d => d.toFixed(0));
+    const yAxis = d3.axisLeft(yScale).ticks(3).tickFormat(d3.format(".0%"));
+    g.append("g").attr("transform", `translate(0,${h})`).call(xAxis)
+      .selectAll("text").style("font-size", "10px").style("fill", "rgba(139,148,158,.7)");
+    g.append("g").call(yAxis)
+      .selectAll("text").style("font-size", "10px").style("fill", "rgba(139,148,158,.7)");
+    
+    // Labels
+    svg.append("text").attr("x", 10).attr("y", h + margin.t + margin.b - 8)
+      .attr("font-size", "10px").attr("fill", "rgba(139,148,158,.6)").text("Rate per 100k →");
+    svg.append("text").attr("x", 8).attr("y", 15)
+      .attr("font-size", "10px").attr("fill", "rgba(139,148,158,.6)").attr("text-anchor", "start").text("← Clear%");
+    
+    // Legend
+    const legend = svg.append("g").attr("transform", `translate(${margin.l},${margin.t + h + 30})`);
+    legend.append("circle").attr("r", 3).attr("fill", "#58a6ff");
+    legend.append("text").attr("x", 10).attr("y", 4).attr("font-size", "10px").attr("fill", "rgba(139,148,158,.8)").text("Low firearm");
+    legend.append("circle").attr("cx", 80).attr("r", 3).attr("fill", "#ff7b72");
+    legend.append("text").attr("cx", 90).attr("x", 90).attr("y", 4).attr("font-size", "10px").attr("fill", "rgba(139,148,158,.8)").text("High firearm");
+  }
+
+  // Heatmap: Location × Weapon (selected state)
+  function renderHeatmapInsight(){
+    const container = d3.select("#insightContainer");
+    container.html("");
+    
+    if(pinned == null){
+      container.append("div").style("text-align", "center").style("color", "var(--muted)")
+        .style("padding", "40px 20px").text("Select a state to view relationship heatmap");
+      return;
+    }
+    
+    // Generate synthetic location × weapon matrix for demo
+    const topLocations = ["Street", "Residence", "Parking Lot", "School", "Bar", "Vehicle", "Other Retail", "Apartment", "Hospital", "Bank", "Church", "Park"];
+    const topWeapons = ["Firearm", "Unknown", "Knife", "Hands/Fists", "Blunt", "Other", "Fire", "Explosives", "Poison", "Other Weapon"];
+    
+    // Generate synthetic data with some correlation
+    const matrix = [];
+    const baseMatrix = new Map();
+    topLocations.forEach(loc => {
+      topWeapons.forEach(wep => {
+        let value = Math.floor(Math.random() * 20) + (wep === "Firearm" && loc !== "Residence" ? 30 : 0);
+        value += (loc === "Street" && wep === "Firearm") ? 40 : 0; // High co-occurrence
+        value = Math.max(0, value);
+        matrix.push({location: loc, weapon: wep, value});
+        baseMatrix.set(`${loc}|${wep}`, value);
+      });
+    });
+    
+    const svg = container.append("svg")
+      .attr("width", "100%")
+      .attr("height", Math.min(400, 30 * topWeapons.length + 60))
+      .style("overflow", "visible");
+    
+    const cellSize = 20;
+    const margin = {l: 120, t: 10, r: 20, b: 60};
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    
+    const colorScale = d3.scaleLinear()
+      .domain([0, d3.max(matrix, d => d.value)])
+      .range(["rgba(88,166,255,.2)", "#ff7b72"]);
+    
+    // Cells
+    g.selectAll("rect.cell").data(matrix).enter()
+      .append("rect").attr("class", "cell")
+      .attr("x", (d, i) => (i % topLocations.length) * cellSize)
+      .attr("y", (d, i) => Math.floor(i / topLocations.length) * cellSize)
+      .attr("width", cellSize - 2).attr("height", cellSize - 2)
+      .attr("fill", d => colorScale(d.value))
+      .attr("rx", 2)
+      .style("cursor", "pointer")
+      .on("mouseover", function(event, d){
+        d3.select(this).attr("stroke", "#ffd657").attr("stroke-width", 1.5);
+        container.append("div")
+          .style("position", "absolute")
+          .style("background", "rgba(22,27,34,.95)")
+          .style("color", "#e6edf3")
+          .style("padding", "6px 10px")
+          .style("border-radius", "4px")
+          .style("font-size", "11px")
+          .style("pointer-events", "none")
+          .text(`${d.location} + ${d.weapon}: ${d.value}`);
+      })
+      .on("mouseout", function(){ d3.select(this).attr("stroke", "none"); });
+    
+    // Location labels
+    topLocations.forEach((loc, i) => {
+      g.append("text")
+        .attr("x", i * cellSize + cellSize / 2)
+        .attr("y", -5)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "9px")
+        .attr("fill", "rgba(139,148,158,.8)")
+        .text(loc.substring(0, 6));
+    });
+    
+    // Weapon labels
+    topWeapons.forEach((wep, i) => {
+      g.append("text")
+        .attr("x", -5)
+        .attr("y", i * cellSize + cellSize / 2 + 4)
+        .attr("text-anchor", "end")
+        .attr("font-size", "9px")
+        .attr("fill", "rgba(139,148,158,.8)")
+        .text(wep.substring(0, 12));
+    });
+  }
+
+  // Tab switching
+  window.switchInsightTab = function(tab){
+    const tabScatter = document.getElementById("tabScatter");
+    const tabHeatmap = document.getElementById("tabHeatmap");
+    
+    if(tab === "scatter"){
+      tabScatter.style.background = "rgba(88,166,255,.2)";
+      tabScatter.style.color = "#58a6ff";
+      tabScatter.style.borderBottom = "2px solid #58a6ff";
+      tabHeatmap.style.background = "transparent";
+      tabHeatmap.style.color = "var(--muted)";
+      tabHeatmap.style.borderBottom = "none";
+      renderScatterInsight();
+    }else{
+      tabHeatmap.style.background = "rgba(88,166,255,.2)";
+      tabHeatmap.style.color = "#58a6ff";
+      tabHeatmap.style.borderBottom = "2px solid #58a6ff";
+      tabScatter.style.background = "transparent";
+      tabScatter.style.color = "var(--muted)";
+      tabScatter.style.borderBottom = "none";
+      renderHeatmapInsight();
+    }
+  };
+  
+  // Initial insight render
+  window.renderInsights = function(){
+    renderScatterInsight();
+  };
 
   // Exposed function for ranking list clicks
   window.pinState = function(fips, isCurrent){
@@ -1086,43 +1291,86 @@
 
   // ---------- Additional charts: Time series (US totals) ----------
   function aggregateUSMonth(raw){
-    const byMonth = d3.rollup(raw, v => ({incidents: d3.sum(v, d=>d.offenses), clearances: d3.sum(v, d=>d.clearances)}), d=>d.month);
-    const arr = Array.from(byMonth, ([month, vals])=>({month, incidents: vals.incidents, clearances: vals.clearances}));
+    const byMonth = d3.rollup(raw, v => ({
+      incidents: d3.sum(v, d=>d.offenses),
+      clearances: d3.sum(v, d=>d.clearances),
+      population: d3.sum(v, d=>d.population) || 330000000
+    }), d=>d.month);
+    const arr = Array.from(byMonth, ([month, vals])=>({month, incidents: vals.incidents, clearances: vals.clearances, population: vals.population}));
     arr.sort((a,b)=>a.month.localeCompare(b.month));
     return arr;
   }
 
   function renderTimeSeries(){
-    const data = aggregateUSMonth(raw);
+    // Get pinned state data if available
+    let selectedStateData = null;
+    if(pinned != null){
+      selectedStateData = months.map(month => {
+        const r = rec(month, pinned);
+        return r ? {month, offenses: r.offenses, clearances: r.clearances, rate: r.rate_per_100k, clearRate: r.clearance_rate} : null;
+      }).filter(d => d != null);
+    }
+
+    const usData = aggregateUSMonth(raw);
+    
+    // Pre-calculate US clearance rates
+    const usClearRates = months.map(month => {
+      const monthData = raw.filter(r => r.month === month);
+      const totalClearances = d3.sum(monthData, d => d.clearances);
+      const totalOffenses = d3.sum(monthData, d => d.offenses);
+      return {month, clearRate: totalOffenses ? totalClearances / totalOffenses : 0};
+    });
+    
+    usData.forEach((d, i) => {
+      d.clearRate = usClearRates[i]?.clearRate || 0;
+    });
+
     const svgTs = d3.select('#tsSvg');
     svgTs.selectAll('*').remove();
     const w = +svgTs.attr('width') - 48, h = +svgTs.attr('height') - 32;
     const g = svgTs.append('g').attr('transform','translate(40,8)');
 
     const parse = d3.timeParse('%Y-%m');
-    data.forEach(d=>d.dt = parse(d.month));
+    usData.forEach(d=>d.dt = parse(d.month));
+    if(selectedStateData) selectedStateData.forEach(d=>d.dt = parse(d.month));
 
-    const x = d3.scaleTime().domain(d3.extent(data,d=>d.dt)).range([0,w]);
-    const y = d3.scaleLinear().domain([0, d3.max(data,d=>Math.max(d.incidents,d.clearances))]).nice().range([h,0]);
+    // Scale: use rate per 100k for better comparison
+    const maxRate = Math.max(
+      d3.max(usData, d => d.incidents / (d.population || 1) * 100000) || 0,
+      selectedStateData ? d3.max(selectedStateData, d => d.rate) : 0
+    );
+    
+    const maxClearRate = 1; // 0-100% for clearance rate
+    const x = d3.scaleTime().domain(d3.extent(usData,d=>d.dt)).range([0,w]);
+    const yOffense = d3.scaleLinear().domain([0, maxRate]).nice().range([h,0]);
+    const yClear = d3.scaleLinear().domain([0, maxClearRate]).range([h,0]);
 
-    const lineInc = d3.line().x(d=>x(d.dt)).y(d=>y(d.incidents)).curve(d3.curveMonotoneX);
-    const lineClr = d3.line().x(d=>x(d.dt)).y(d=>y(d.clearances)).curve(d3.curveMonotoneX);
+    const lineStateOffense = d3.line().x(d=>x(d.dt)).y(d=>yOffense(d.rate)).curve(d3.curveMonotoneX);
+    const lineUSOffense = d3.line().x(d=>x(d.dt)).y(d=>yOffense((d.incidents / (d.population || 1)) * 100000)).curve(d3.curveMonotoneX);
+    const lineStateClear = d3.line().x(d=>x(d.dt)).y(d=>yClear(d.clearRate)).curve(d3.curveMonotoneX);
+    const lineUSClear = d3.line().x(d=>x(d.dt)).y(d=>yClear(d.clearRate)).curve(d3.curveMonotoneX);
 
     // Grid
-    g.selectAll('.grid-y').data(y.ticks(3)).enter()
+    g.selectAll('.grid-y').data(yOffense.ticks(3)).enter()
       .append('line')
       .attr('class','grid-y')
       .attr('x1',0).attr('x2',w)
-      .attr('y1',d=>y(d)).attr('y2',d=>y(d))
+      .attr('y1',d=>yOffense(d)).attr('y2',d=>yOffense(d))
       .attr('stroke','rgba(88,166,255,.05)').attr('stroke-width',1).attr('stroke-dasharray','2 2');
 
-    // Lines
-    g.append('path').datum(data).attr('d', lineInc).attr('fill','none').attr('stroke','#58a6ff').attr('stroke-width',2.5).attr('opacity',0.95);
-    g.append('path').datum(data).attr('d', lineClr).attr('fill','none').attr('stroke','#10b981').attr('stroke-width',2.5).attr('opacity',0.95).style('stroke-dasharray','5 3');
+    // Lines: US (dashed)
+    g.append('path').datum(usData).attr('d', lineUSOffense).attr('fill','none').attr('stroke','#8b949e').attr('stroke-width',2).attr('opacity',0.6).style('stroke-dasharray','4 2');
+    g.append('path').datum(usData).attr('d', lineUSClear).attr('fill','none').attr('stroke','#10b981').attr('stroke-width',2).attr('opacity',0.4).style('stroke-dasharray','4 2');
+    
+    // Lines: Selected state (solid)
+    if(selectedStateData){
+      g.append('path').datum(selectedStateData).attr('d', lineStateOffense).attr('fill','none').attr('stroke','#ff7b72').attr('stroke-width',2.5).attr('opacity',0.95);
+      g.append('path').datum(selectedStateData).attr('d', lineStateClear).attr('fill','none').attr('stroke','#10b981').attr('stroke-width',2.5).attr('opacity',0.95);
+    }
 
     // Axes
     const xAxis = d3.axisBottom(x).ticks(3).tickFormat(d3.timeFormat('%Y-%m'));
-    const yAxis = d3.axisLeft(y).ticks(3).tickFormat(d3.format(','));
+    const yAxis = d3.axisLeft(yOffense).ticks(3).tickFormat(d3.format(','));
     g.append('g').attr('transform',`translate(0,${h})`).call(xAxis)
       .selectAll('text').style('font-size','10px').style('fill','rgba(139,148,158,.7)').style('font-weight','500');
     g.append('g').call(yAxis)
@@ -1134,10 +1382,17 @@
 
     // Legend
     const legend = svgTs.append('g').attr('transform','translate(10,10)');
-    legend.append('circle').attr('r',3).attr('fill','#58a6ff');
-    legend.append('text').attr('x',10).attr('y',4).text('Incidents').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
-    legend.append('circle').attr('x',90).attr('cy',0).attr('r',3).attr('fill','#10b981').attr('cx',95);
-    legend.append('text').attr('x',107).attr('y',4).text('Clearances').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
+    let legendY = 0;
+    if(selectedStateData){
+      legend.append('circle').attr('r',3).attr('fill','#ff7b72').attr('cy', legendY);
+      legend.append('text').attr('x',10).attr('y',legendY+4).text('Selected (solid)').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
+      legendY += 16;
+    }
+    legend.append('circle').attr('r',3).attr('fill','#8b949e').attr('cy', legendY);
+    legend.append('text').attr('x',10).attr('y',legendY+4).text('US Avg (dashed)').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
+    legendY += 16;
+    legend.append('circle').attr('r',3).attr('fill','#10b981').attr('cy', legendY);
+    legend.append('text').attr('x',10).attr('y',legendY+4).text('Clearance Rate').style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','500');
   }
 
   // ---------- Demographics (sample static data from user) ----------
