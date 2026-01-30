@@ -369,8 +369,80 @@
   const hintEl = document.getElementById("hint");
 
   // RESET APP STATE - Complete initialization
+  // ========== ROBUST RENDER PIPELINE HELPERS ==========
+  
+  // Get element size safely - handles 0 width/height
+  function getSize(el) {
+    if (!el) return {w: 700, h: 300};
+    const rect = el.getBoundingClientRect();
+    let w = rect.width || el.offsetWidth || el.clientWidth;
+    let h = rect.height || el.offsetHeight || el.clientHeight;
+    
+    // Fallback to parent if element has 0 size
+    if ((!w || w === 0) && el.parentElement) {
+      const parentRect = el.parentElement.getBoundingClientRect();
+      w = parentRect.width - 40; // account for padding
+    }
+    if ((!h || h === 0)) {
+      h = 300; // default height
+    }
+    
+    return {
+      w: Math.max(250, w),
+      h: Math.max(150, h)
+    };
+  }
+
+  // Schedule render with retry logic - waits for non-zero size
+  function scheduleRender(el, renderFn, maxRetries = 10) {
+    let retries = 0;
+    
+    function tryRender() {
+      if (!el) return;
+      
+      const {w, h} = getSize(el);
+      
+      // If size is valid, render
+      if (w > 250 && h > 150) {
+        console.log(`[scheduleRender] Rendering with size ${w}x${h}`);
+        try {
+          renderFn(el, w, h);
+        } catch (e) {
+          console.error("[scheduleRender] Error:", e);
+        }
+      } else if (retries < maxRetries) {
+        // Retry on next frame
+        retries++;
+        requestAnimationFrame(tryRender);
+      } else {
+        console.warn(`[scheduleRender] Max retries exceeded for`, el.id, `size: ${w}x${h}`);
+      }
+    }
+    
+    requestAnimationFrame(tryRender);
+  }
+
+  // Update all charts safely
+  function updateAllCharts() {
+    console.log("[updateAllCharts] Updating all insight charts...");
+    try {
+      updateTrendChartBelow();
+    } catch (e) { console.error("[updateAllCharts] Trend error:", e); }
+    try {
+      updateScatterChart();
+    } catch (e) { console.error("[updateAllCharts] Scatter error:", e); }
+    try {
+      updateHeatmapChart();
+    } catch (e) { console.error("[updateAllCharts] Heatmap error:", e); }
+    try {
+      updateStackedChart();
+    } catch (e) { console.error("[updateAllCharts] Stacked error:", e); }
+  }
+
+  // ========== ENHANCED RESET STATE ==========
   function resetAppState(){
     console.log("[resetAppState] Resetting to initial state");
+    
     // 1. Exit compare mode
     isCompareMode = false;
     comparedStates = [];
@@ -406,16 +478,22 @@
     const compCard = document.getElementById("comparisonCard");
     if(compCard) compCard.style.display = "none";
     
-    // 7. Reset insights charts to default/placeholder
-    renderInsights();
+    // 7. Clear tooltip
+    tooltip.style("opacity", 0).html("");
     
-    // 8. Re-render all sidebar charts with default state
+    // 8. Reset insights charts to default/placeholder
+    updateAllCharts();
+    
+    // 9. Re-render all sidebar charts with default state
     const currentMonth = months[months.length - 1];
     renderTimeSeries();
     renderAgeChart();
     renderSexChart();
     renderSankey();
     renderRankings(currentMonth);
+    
+    // 10. Scroll to top (optional but helpful)
+    window.scrollTo({top: 0, behavior: 'smooth'});
   }
 
   // Calculate 12-month trend
@@ -889,18 +967,8 @@
 
   // Initial insight render - called when data/month/pinned changes
   window.renderInsights = function(){
-    console.log("[renderInsights] Called");
-    setTimeout(() => {
-      try {
-        updateScatterChart();
-      } catch(e) { console.error("[Scatter]", e); }
-      try {
-        updateHeatmapChart();
-      } catch(e) { console.error("[Heatmap]", e); }
-      try {
-        updateStackedChart();
-      } catch(e) { console.error("[Stacked]", e); }
-    }, 50);
+    console.log("[renderInsights] Called (delegating to updateAllCharts)");
+    updateAllCharts();
   };
 
   // Exposed function for ranking list clicks
@@ -1229,8 +1297,22 @@
   // ---------- NEW MODULAR INSIGHTS CHARTS ----------
   // TREND CHART - Below map version (reusing renderTimeSeries logic)
   function updateTrendChartBelow(){
-    const container = d3.select("#trendChartContainer");
-    container.html("");
+    const containerEl = document.getElementById("trendChartContainer");
+    if (!containerEl) {
+      console.warn("[Trend] Container not found");
+      return;
+    }
+    
+    // Use scheduleRender for robust rendering
+    scheduleRender(containerEl, (el, w, h) => {
+      renderTrendChartContent(el, w);
+    });
+  }
+
+  // Actual trend chart rendering (called by scheduleRender)
+  function renderTrendChartContent(containerEl, forcedWidth) {
+    const container = d3.select(containerEl);
+    container.html(""); // Clear previous
     
     // Get pinned state data if available
     let selectedStateData = null;
@@ -1255,12 +1337,7 @@
       d.clearRate = usClearRates[i]?.clearRate || 0;
     });
 
-    const containerEl = document.getElementById("trendChartContainer");
-    if (!containerEl) {
-      console.error("[Trend] Container not found");
-      return;
-    }
-    let containerWidth = containerEl.offsetWidth;
+    let containerWidth = forcedWidth || containerEl.offsetWidth;
     if (!containerWidth || containerWidth === 0) {
       const parent = containerEl.parentElement;
       containerWidth = parent ? parent.offsetWidth - 40 : 700;
@@ -1556,7 +1633,21 @@
   }
 
   function updateScatterChart(){
-    console.log("[Scatter] Rendering scatter chart...");
+    const containerEl = document.getElementById("scatterChartContainer");
+    if (!containerEl) {
+      console.warn("[Scatter] Container not found");
+      return;
+    }
+    
+    // Use scheduleRender for robust rendering
+    scheduleRender(containerEl, (el, w, h) => {
+      renderScatterChartContent(el, w, h);
+    });
+  }
+
+  // Actual scatter chart rendering (called by scheduleRender)
+  function renderScatterChartContent(containerEl, forcedW, forcedH) {
+    console.log("[Scatter] Rendering scatter chart content...");
     const current_month = months[+monthRange.node().value];
     if(!current_month) {
       console.log("[Scatter] No month selected");
@@ -1584,15 +1675,44 @@
     console.log("[Scatter] Data points:", stateData.length);
     
     if(stateData.length === 0){
-      d3.select("#scatterChartContainer").html(
+      d3.select(containerEl).html(
         '<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">No data available for selected month</div>'
       );
       return;
     }
+
+    // Calculate sizes
+    let containerWidth = forcedW || containerEl.offsetWidth;
+    if (!containerWidth || containerWidth === 0) {
+      const parent = containerEl.parentElement;
+      containerWidth = parent ? parent.offsetWidth - 40 : 700;
+    }
+    containerWidth = Math.max(300, containerWidth);
     
-    const chart = initScatterChart();
-    if(!chart) return; // Container not found
-    const {svg, g, margin, w, h, containerWidth} = chart;
+    const margin = {l: 50, t: 20, r: 20, b: 40};
+    const w = Math.max(300, containerWidth - margin.l - margin.r);
+    const h = forcedH || 280;
+    
+    // Create SVG directly
+    const container = d3.select(containerEl);
+    container.html(""); // Clear previous
+    
+    const svg = container.append("svg")
+      .attr("width", containerWidth)
+      .attr("height", h + margin.t + margin.b)
+      .style("background", "transparent");
+    
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    
+    // Add gridlines
+    g.append("g").attr("class", "grid-x")
+      .selectAll("line").data(d3.ticks(0, 1, 5)).enter()
+      .append("line")
+      .attr("x1", 0).attr("x2", w)
+      .attr("y1", (d, i) => (i / 4) * h).attr("y2", (d, i) => (i / 4) * h)
+      .attr("stroke", "rgba(88,166,255,.05)").attr("stroke-width", 1);
+    
+    console.log("[Scatter] Chart rendering: width=", containerWidth, "w=", w, "h=", h);
     
     // Scales
     const xExtent = d3.extent(stateData, d => d.rate);
@@ -1657,17 +1777,32 @@
 
   // 2. HEATMAP CHART - Location × Weapon for selected state
   function updateHeatmapChart(){
+    const containerEl = document.getElementById("heatmapChartContainer");
+    if (!containerEl) {
+      console.warn("[Heatmap] Container not found");
+      return;
+    }
+    
     if(pinned == null){
-      d3.select("#heatmapChartContainer").html(
+      d3.select(containerEl).html(
         '<div style="text-align:center; color:rgba(139,148,158,.7); padding:80px 20px; font-size:14px;">📌 Select a state to view Location × Weapon breakdown</div>'
       );
       return;
     }
     
-    const container = d3.select("#heatmapChartContainer");
-    const containerEl = document.getElementById("heatmapChartContainer");
-    if (!containerEl) {
-      console.error("[Heatmap] Container not found");
+    // Use scheduleRender for robust rendering
+    scheduleRender(containerEl, (el, w, h) => {
+      renderHeatmapChartContent(el, w, h);
+    });
+  }
+
+  // Actual heatmap chart rendering (called by scheduleRender)
+  function renderHeatmapChartContent(containerEl, forcedW, forcedH) {
+    console.log("[Heatmap] Rendering heatmap chart content...");
+    if(pinned == null) return;
+    
+    const container = d3.select(containerEl);
+    container.html(""); // Clear previous
       return;
     }
     let containerWidth = containerEl.offsetWidth;
@@ -1756,8 +1891,11 @@
 
   // 3. STACKED COMPOSITION CHART - Weapon types
   function updateStackedChart(){
-    const container = d3.select("#stackedChartContainer");
-    container.html("");
+    const containerEl = document.getElementById("stackedChartContainer");
+    if (!containerEl) {
+      console.warn("[Stacked] Container not found");
+      return;
+    }
     
     const current_month = months[+monthRange.node().value];
     if(!current_month) {
@@ -1766,16 +1904,30 @@
     }
     
     if(pinned == null){
-      container.html('<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">📌 Select a state to compare</div>');
+      d3.select(containerEl).html(
+        '<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">📌 Select a state to compare</div>'
+      );
       return;
     }
     
-    const containerEl = document.getElementById("stackedChartContainer");
-    if (!containerEl) {
-      console.error("[Stacked] Container not found");
-      return;
-    }
-    let containerWidth = containerEl.offsetWidth;
+    // Use scheduleRender for robust rendering
+    scheduleRender(containerEl, (el, w, h) => {
+      renderStackedChartContent(el, w, h);
+    });
+  }
+
+  // Actual stacked chart rendering (called by scheduleRender)
+  function renderStackedChartContent(containerEl, forcedW, forcedH) {
+    console.log("[Stacked] Rendering stacked chart content...");
+    if(pinned == null) return;
+    
+    const current_month = months[+monthRange.node().value];
+    if(!current_month) return;
+    
+    const container = d3.select(containerEl);
+    container.html(""); // Clear previous
+    
+    let containerWidth = forcedW || containerEl.offsetWidth;
     if (!containerWidth || containerWidth === 0) {
       const parent = containerEl.parentElement;
       containerWidth = parent ? parent.offsetWidth - 40 : 700;
@@ -1784,7 +1936,7 @@
     
     const margin = {l: 50, t: 20, r: 80, b: 40};
     const w = Math.max(300, containerWidth - margin.l - margin.r);
-    const h = 160;
+    const h = forcedH || 160;
     
     const svg = container.append("svg")
       .attr("width", containerWidth)
@@ -1947,6 +2099,44 @@
     });
   }
   
+  // ========== RESIZE OBSERVER FOR CHARTS ==========
+  // Re-render charts when container sizes change
+  function setupResizeObservers() {
+    const containerIds = [
+      "trendChartContainer",
+      "scatterChartContainer",
+      "heatmapChartContainer",
+      "stackedChartContainer"
+    ];
+    
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        const id = entry.target.id;
+        console.log(`[ResizeObserver] ${id} resized:`, entry.contentRect.width, "x", entry.contentRect.height);
+        
+        // Trigger appropriate chart update based on container ID
+        if (id === "trendChartContainer") {
+          updateTrendChartBelow();
+        } else if (id === "scatterChartContainer") {
+          updateScatterChart();
+        } else if (id === "heatmapChartContainer") {
+          updateHeatmapChart();
+        } else if (id === "stackedChartContainer") {
+          updateStackedChart();
+        }
+      }
+    });
+    
+    // Observe all chart containers
+    containerIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) {
+        resizeObserver.observe(el);
+        console.log(`[ResizeObserver] Observing #${id}`);
+      }
+    });
+  }
+  
   // Keyboard shortcuts
   document.addEventListener("keydown", (e) => {
     if(e.key === "Escape" && isCompareMode){
@@ -1954,7 +2144,12 @@
     }
   });
 
-  renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey(); renderInsights();
+  // Initialize all charts after data is loaded
+  renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey(); 
+  updateAllCharts();
+  
+  // Setup ResizeObserver for responsive re-rendering
+  setupResizeObservers();
 })();
 
 </script>
