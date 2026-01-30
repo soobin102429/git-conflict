@@ -936,7 +936,7 @@
     if(comparedStates.length >= 2){
       html += `<div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--stroke);">
                  <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:8px;">Profile Comparison</div>
-                 <svg id="compRadar" width="100%" height="200" style="background:rgba(0,0,0,.2); border-radius:6px; overflow:visible;"></svg>
+                 <svg id="compRadar" width="100%" height="220" style="background:rgba(0,0,0,.15); border-radius:6px; overflow:visible;"></svg>
                </div>`;
     }
     
@@ -1039,13 +1039,19 @@
     });
     
     // Legend
-    const legend = svg.append('g').attr('transform', `translate(${center.x - 60}, ${center.y + radius + 30})`);
     comparedStates.forEach((fips, i) => {
       const r = rec(month, fips);
       const abbr = r?.abbr || '?';
-      legend.append('circle').attr('r', 4).attr('fill', colors[i]);
-      legend.append('text').attr('x', 12).attr('y', 4).attr('font-size', '9px').attr('fill', 'var(--text)').text(abbr);
-      legend.attr('transform', `translate(${(center.x - 60) + i * 50}, ${center.y + radius + 30})`);
+      const name = r?.name?.substring(0, 8) || '?';
+      
+      const legendG = g.append('g').attr('transform', `translate(${center.x - 50 + i * 45}, ${center.y + radius + 28})`);
+      legendG.append('circle').attr('r', 4).attr('fill', colors[i]);
+      legendG.append('text')
+        .attr('x', 10).attr('y', 4)
+        .attr('font-size', '10px')
+        .attr('font-weight', '600')
+        .attr('fill', 'var(--text)')
+        .text(abbr);
     });
   }
 
