@@ -869,6 +869,9 @@
       kpis.html("");
       svg.selectAll("path.state").classed("pinned", false);
     }
+    // 🔴 KEY FIX: Update insights charts when pinned state changes
+    updateTrendChartBelow();
+    renderInsights();
   };
 
   // Toggle compare mode
@@ -908,6 +911,10 @@
       // Reset hint
       if(hintEl) hintEl.textContent = "Hover = preview • Click = pin panel";
     }
+    
+    // 🔴 KEY FIX: Update insights charts when exiting/entering compare mode
+    updateTrendChartBelow();
+    renderInsights();
   };
 
   // Add state to compare
@@ -947,6 +954,10 @@
         return color;
       })
       .classed("compared", d => comparedStates.includes(+d.id));
+    
+    // 🔴 KEY FIX: Update insights charts when compare selection changes
+    updateTrendChartBelow();
+    renderInsights();
   };
 
   function updateCompareBtn(){
