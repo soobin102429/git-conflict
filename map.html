@@ -74,9 +74,11 @@
     .kpi .k{ color:var(--muted); font-size:11px; font-weight:600; letter-spacing:0.3px; text-transform:uppercase; }
     .kpi .v{ margin-top:8px; font-size:18px; font-weight:700; color:#58a6ff; }
 
-    .state{ cursor:pointer; stroke:var(--stroke); stroke-width:.6; vector-effect:non-scaling-stroke; transition:all 0.15s ease; }
-    .state:hover{ stroke:rgba(255,255,255,.6); stroke-width:1.2; filter:brightness(1.2); }
-    .state:focus{ outline:none; stroke:rgba(255,255,255,.9); stroke-width:1.8; }
+    .state{ cursor:pointer; stroke:var(--bg); stroke-width:1.5; vector-effect:non-scaling-stroke; transition:all 0.2s ease; filter:drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
+    .state:hover{ stroke:rgba(88,166,255,.6); stroke-width:2; filter:drop-shadow(0 4px 12px rgba(88,166,255,.3)); }
+    .state:focus{ outline:none; stroke:#58a6ff; stroke-width:2.5; filter:drop-shadow(0 6px 16px rgba(88,166,255,.4)); }
+    .state.pinned{ stroke:#58a6ff; stroke-width:2.5; filter:drop-shadow(0 0px 12px rgba(88,166,255,.4)); }
+    .state.compared{ stroke:#ffd657; stroke-width:2.2; filter:drop-shadow(0 0px 8px rgba(255,214,87,.5)); }
 
     @media (max-width: 1200px){ .grid{ grid-template-columns: 1fr 350px; gap:14px; } }
     @media (max-width: 900px){ .grid{ grid-template-columns:1fr; height:auto; } .right{ max-height:none; } }
@@ -85,7 +87,15 @@
 <body>
 <header>
   <h1>Aggravated Assault • State Heatmap</h1>
-  <div class="hint">Hover = preview • Click = pin panel</div>
+  <div style="display:flex; gap:12px; align-items:center;">
+    <button id="compareBtn" style="background:rgba(88,166,255,.2); border:1px solid rgba(88,166,255,.4); color:#58a6ff; padding:7px 14px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; transition:all 0.2s ease;" 
+            onclick="toggleCompareMode();"
+            onmouseover="if(!window.isCompareMode) { this.style.background='rgba(88,166,255,.3)'; this.style.borderColor='rgba(88,166,255,.6)'; }" 
+            onmouseout="if(!window.isCompareMode) { this.style.background='rgba(88,166,255,.2)'; this.style.borderColor='rgba(88,166,255,.4)'; }">
+      📊 Compare (0)
+    </button>
+    <div class="hint">Hover = preview • Click = pin panel</div>
+  </div>
 </header>
 
 <div class="grid">
@@ -309,6 +319,9 @@
 
   // ---------- Panel ----------
   let pinned = null;
+  let isCompareMode = false;
+  let comparedStates = [];
+  const compareBtn = document.getElementById("compareBtn");
 
   // Calculate 12-month trend
   function calculateTrend(fips){
@@ -608,14 +621,15 @@
           .style("left", event.offsetX + "px")
           .style("top",  event.offsetY + "px")
           .html(`
-            <div style="font-weight:700;margin-bottom:4px; color:${statusColor};">
-              ${(r?.name)||"Unknown"} ${(r?.abbr)?`(${r.abbr})`:""}
+            <div style="font-weight:700; color:${statusColor};">
+              ${(r?.name)||"Unknown"}
             </div>
-            <div class="muted">${month}</div>
-            <div style="margin-top:6px;">
+            <div class="muted" style="margin-top:4px; margin-bottom:6px;">${month}</div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
               <div><span class="muted">${meta.label}:</span> <b style="color:${statusColor};">${value}</b></div>
-              ${r && isFinite(r[metric]) ? `<div><span class="muted">Offenses:</span> ${d3.format(",")(r.offenses)}</div>` : `<div style="color:#8b949e; font-style:italic;">No data for this state</div>`}
-              ${r && isFinite(r[metric]) ? `<div><span class="muted">Clearance rate:</span> ${((r.clearance_rate||0)*100).toFixed(1)}%</div>` : ``}
+              ${r && isFinite(r[metric]) ? `<div><span class="muted">Offenses:</span> ${d3.format(",")(r.offenses)}</div>` : ``}
+              ${r && isFinite(r[metric]) ? `<div><span class="muted">Rate/100k:</span> ${d3.format(",.0f")(r.rate_per_100k)}</div>` : ``}
+              ${r && isFinite(r[metric]) ? `<div><span class="muted">Clear rate:</span> ${((r.clearance_rate||0)*100).toFixed(1)}%</div>` : `<div style="color:#8b949e; font-style:italic; font-size:11px;">No data</div>`}
             </div>
           `);
 
@@ -647,15 +661,23 @@
       })
       .on("click", (event, d) => {
         const id = +d.id;
-        pinned = (pinned === id) ? null : id;
-        if(pinned != null){
-          setPanel(month, pinned, true);
+        if(isCompareMode){
+          window.addStateToCompare(id);
         }else{
-          pTitle.text("Select a state");
-          pMonth.text("—");
-          pMetric.text("—");
-          pinHint.text("Not pinned");
-          kpis.html("");
+          pinned = (pinned === id) ? null : id;
+          if(pinned != null){
+            setPanel(month, pinned, true);
+            svg.selectAll("path.state")
+              .classed("pinned", s => +s.id === pinned)
+              .classed("compared", false);
+          }else{
+            pTitle.text("Select a state");
+            pMonth.text("—");
+            pMetric.text("—");
+            pinHint.text("Not pinned");
+            kpis.html("");
+            svg.selectAll("path.state").classed("pinned", false);
+          }
         }
       });
 
@@ -726,21 +748,143 @@
 
   // Exposed function for ranking list clicks
   window.pinState = function(fips, isCurrent){
+    if(isCompareMode){
+      window.addStateToCompare(fips);
+      return;
+    }
     const currentId = +fips;
     pinned = (pinned === currentId) ? null : currentId;
     if(pinned != null){
       setPanel(months[+monthRange.node().value], pinned, true);
-      // highlight state on map
-      svg.selectAll("path.state").style("stroke-width", d => (+d.id === pinned) ? "2.5px" : "1.5px");
+      // highlight state on map with glow
+      svg.selectAll("path.state")
+        .classed("pinned", d => +d.id === pinned)
+        .classed("compared", false);
     }else{
       pTitle.text("Select a state");
       pMonth.text("—");
       pMetric.text("—");
       pinHint.text("Not pinned");
       kpis.html("");
-      svg.selectAll("path.state").style("stroke-width", "1.5px");
+      svg.selectAll("path.state").classed("pinned", false);
     }
   };
+
+  // Toggle compare mode
+  window.toggleCompareMode = function(){
+    isCompareMode = !isCompareMode;
+    if(compareBtn){
+      if(isCompareMode){
+        compareBtn.style.background = "rgba(255,214,87,.3)";
+        compareBtn.style.borderColor = "rgba(255,214,87,.7)";
+        compareBtn.style.color = "var(--accent-mid)";
+        compareBtn.style.opacity = "1";
+      }else{
+        compareBtn.style.background = "rgba(88,166,255,.2)";
+        compareBtn.style.borderColor = "rgba(88,166,255,.4)";
+        compareBtn.style.color = "#58a6ff";
+        compareBtn.style.opacity = "0.6";
+      }
+    }
+    comparedStates = [];
+    updateCompareBtn();
+    svg.selectAll("path.state").classed("compared", false);
+    if(!isCompareMode && pinned != null){
+      setPanel(months[+monthRange.node().value], pinned, true);
+    }else if(isCompareMode){
+      // Show hint when entering compare mode
+      pTitle.text("Select states to compare");
+      pMonth.text("(up to 3)");
+      kpis.html("");
+    }
+  };
+
+  // Add state to compare
+  window.addStateToCompare = function(fips){
+    if(!isCompareMode) return;
+    const id = +fips;
+    const idx = comparedStates.findIndex(s => s === id);
+    if(idx > -1){
+      comparedStates.splice(idx, 1);
+    }else if(comparedStates.length < 3){
+      comparedStates.push(id);
+    }
+    updateCompareBtn();
+    renderComparison();
+    svg.selectAll("path.state")
+      .classed("compared", d => comparedStates.includes(+d.id));
+  };
+
+  function updateCompareBtn(){
+    if(compareBtn) compareBtn.innerHTML = `📊 Compare (${comparedStates.length})`;
+  }
+
+  function renderComparison(){
+    let compCard = document.getElementById("comparisonCard");
+    if(!compCard){
+      compCard = document.createElement("div");
+      compCard.id = "comparisonCard";
+      compCard.style.cssText = `background:var(--card); border-radius:8px; padding:16px; margin-bottom:12px;
+        border-left:4px solid var(--accent-mid);`;
+      const sidebar = document.querySelector("aside.right");
+      // Insert after Rankings card (which contains topList)
+      const rankingsCard = document.querySelector("#topList").closest(".card");
+      if(rankingsCard && rankingsCard.nextElementSibling){
+        rankingsCard.parentElement.insertBefore(compCard, rankingsCard.nextElementSibling);
+      }else{
+        sidebar.appendChild(compCard);
+      }
+    }
+    
+    if(comparedStates.length === 0){
+      compCard.style.display = "none";
+      return;
+    }
+    
+    compCard.style.display = "block";
+    const month = months[+monthRange.node().value];
+    const metric = metricSel.node().value;
+    
+    let html = `<div style="font-size:13px; font-weight:600; color:var(--accent-mid); margin-bottom:10px;">
+                  Comparing ${comparedStates.length} state${comparedStates.length>1?"s":""}
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">`;
+    
+    comparedStates.forEach(fips => {
+      const r = rec(month, fips);
+      const name = r?.abbr || "?";
+      html += `<span style="background:rgba(255,214,87,.1); padding:4px 8px; border-radius:4px; font-size:11px; 
+               border-left:2px solid var(--accent-mid); color:var(--text);">${name}</span>`;
+    });
+    
+    html += `</div>
+             <table style="width:100%; font-size:11px; border-collapse:collapse;">
+             <tr style="border-bottom:1px solid var(--stroke); color:var(--muted);">
+               <td style="padding:6px 0;">State</td>
+               <td style="padding:6px 0; text-align:right;">${META[metric].label}</td>
+               <td style="padding:6px 0; text-align:right;">Rate</td>
+               <td style="padding:6px 0; text-align:right;">Clear</td>
+             </tr>`;
+    
+    comparedStates.forEach(fips => {
+      const r = rec(month, fips);
+      if(r){
+        const val = r[metric] || 0;
+        const fmt = META[metric].fmt(val);
+        const rate = (r.rate_per_100k || 0).toFixed(1);
+        const clear = Math.round((r.clearances / r.offenses) * 100) || 0;
+        html += `<tr style="border-bottom:1px solid rgba(255,255,255,.05);">
+                 <td style="padding:6px 0; font-weight:600;">${r.abbr}</td>
+                 <td style="padding:6px 0; text-align:right; color:var(--accent-high);">${fmt}</td>
+                 <td style="padding:6px 0; text-align:right;">${rate}</td>
+                 <td style="padding:6px 0; text-align:right;">${clear}%</td>
+                </tr>`;
+      }
+    });
+    
+    html += `</table>`;
+    compCard.innerHTML = html;
+  }
 
   metricSel.on("change", render);
   monthRange.on("input", render);
