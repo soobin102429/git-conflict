@@ -82,12 +82,11 @@
     .state.compared:hover{ stroke:#ffd657; stroke-width:2.5; filter:drop-shadow(0 0px 16px rgba(255,214,87,.8)); }
 
     #insightsSection{
-      padding:20px 28px; background:transparent; display:grid; grid-template-columns:1fr;
-      grid-column:1/-1; gap:20px;
+      padding:20px 28px; background:transparent; display:block; gap:20px; width:100%;
     }
     .insight-chart-wrapper{
       background:rgba(22,27,34,.6); border:1px solid var(--stroke); border-radius:16px;
-      padding:20px; box-shadow:var(--shadow); backdrop-filter:blur(8px);
+      padding:20px; box-shadow:var(--shadow); backdrop-filter:blur(8px); margin-bottom:20px; width:100%; box-sizing:border-box;
     }
     .insight-chart-wrapper h3{
       margin:0 0 12px 0; font-size:14px; font-weight:700; letter-spacing:0.4px;
@@ -216,22 +215,22 @@
   
   <div class="insight-chart-wrapper">
     <h3>Trend Line (Selected State vs US Average)</h3>
-    <div id="trendChartContainer" style="min-height:280px;"></div>
+    <div id="trendChartContainer" style="min-height:280px; width:100%; box-sizing:border-box;"></div>
   </div>
 
   <div class="insight-chart-wrapper">
     <h3>Scatter Plot (Clearance Rate vs Offenses)</h3>
-    <div id="scatterChartContainer" style="min-height:320px;"></div>
+    <div id="scatterChartContainer" style="min-height:320px; width:100%; box-sizing:border-box;"></div>
   </div>
 
   <div class="insight-chart-wrapper">
     <h3>Weapon Composition (100% Stacked)</h3>
-    <div id="stackedChartContainer" style="min-height:200px;"></div>
+    <div id="stackedChartContainer" style="min-height:200px; width:100%; box-sizing:border-box;"></div>
   </div>
 
   <div class="insight-chart-wrapper">
     <h3>Location × Weapon Heatmap</h3>
-    <div id="heatmapChartContainer" style="min-height:300px;"></div>
+    <div id="heatmapChartContainer" style="min-height:300px; width:100%; box-sizing:border-box;"></div>
   </div>
 </section>
 
@@ -1190,14 +1189,25 @@
     });
 
     const containerEl = document.getElementById("trendChartContainer");
-    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    if (!containerEl) {
+      console.error("[Trend] Container not found");
+      return;
+    }
+    let containerWidth = containerEl.offsetWidth;
+    if (!containerWidth || containerWidth === 0) {
+      const parent = containerEl.parentElement;
+      containerWidth = parent ? parent.offsetWidth - 40 : 700;
+    }
+    containerWidth = Math.max(400, containerWidth);
+    
     const margin = {l: 50, t: 20, r: 20, b: 40};
     const w = Math.max(500, containerWidth - margin.l - margin.r);
     const h = 260;
 
     const svg = container.append("svg")
       .attr("width", containerWidth)
-      .attr("height", h + margin.t + margin.b);
+      .attr("height", h + margin.t + margin.b)
+      .style("background", "transparent");
 
     const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
 
@@ -1439,9 +1449,21 @@
     const container = d3.select("#scatterChartContainer");
     container.html("");
     
-    // Get actual container width
+    // Get actual container width - with fallback to body width
     const containerEl = document.getElementById("scatterChartContainer");
-    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    if (!containerEl) {
+      console.error("[Scatter] Container #scatterChartContainer not found");
+      return null;
+    }
+    
+    // Get computed width
+    let containerWidth = containerEl.offsetWidth;
+    if (!containerWidth || containerWidth === 0) {
+      // Fallback: get parent width
+      const parent = containerEl.parentElement;
+      containerWidth = parent ? parent.offsetWidth - 40 : 700; // 40px for padding
+    }
+    containerWidth = Math.max(300, containerWidth);
     
     const margin = {l: 50, t: 20, r: 20, b: 40};
     const w = Math.max(300, containerWidth - margin.l - margin.r);
@@ -1449,7 +1471,8 @@
     
     const svg = container.append("svg")
       .attr("width", containerWidth)
-      .attr("height", h + margin.t + margin.b);
+      .attr("height", h + margin.t + margin.b)
+      .style("background", "transparent");
     
     const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
@@ -1461,6 +1484,7 @@
       .attr("y1", (d, i) => (i / 4) * h).attr("y2", (d, i) => (i / 4) * h)
       .attr("stroke", "rgba(88,166,255,.05)").attr("stroke-width", 1);
     
+    console.log("[Scatter] Chart initialized: width=", containerWidth, "w=", w, "h=", h);
     return {svg, g, margin, w, h, containerWidth};
   }
 
@@ -1499,7 +1523,9 @@
       return;
     }
     
-    const {svg, g, margin, w, h, containerWidth} = initScatterChart();
+    const chart = initScatterChart();
+    if(!chart) return; // Container not found
+    const {svg, g, margin, w, h, containerWidth} = chart;
     
     // Scales
     const xExtent = d3.extent(stateData, d => d.rate);
@@ -1563,12 +1589,6 @@
   }
 
   // 2. HEATMAP CHART - Location × Weapon for selected state
-  function initHeatmapChart(){
-    const container = d3.select("#heatmapChartContainer");
-    container.html("");
-    return container;
-  }
-
   function updateHeatmapChart(){
     if(pinned == null){
       d3.select("#heatmapChartContainer").html(
@@ -1577,10 +1597,19 @@
       return;
     }
     
-    initHeatmapChart();
     const container = d3.select("#heatmapChartContainer");
     const containerEl = document.getElementById("heatmapChartContainer");
-    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    if (!containerEl) {
+      console.error("[Heatmap] Container not found");
+      return;
+    }
+    let containerWidth = containerEl.offsetWidth;
+    if (!containerWidth || containerWidth === 0) {
+      const parent = containerEl.parentElement;
+      containerWidth = parent ? parent.offsetWidth - 40 : 700;
+    }
+    containerWidth = Math.max(300, containerWidth);
+    container.html("");
     
     // Generate synthetic Location × Weapon matrix
     const locations = ["Street", "Residence", "Parking Lot", "School", "Bar"];
@@ -1604,7 +1633,8 @@
     
     const svg = container.append("svg")
       .attr("width", containerWidth)
-      .attr("height", height);
+      .attr("height", height)
+      .style("background", "transparent");
     
     const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
@@ -1663,31 +1693,27 @@
     container.html("");
     
     const current_month = months[+monthRange.node().value];
-    if(!current_month) return;
+    if(!current_month) {
+      console.log("[Stacked] No month selected");
+      return;
+    }
     
     if(pinned == null){
       container.html('<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">📌 Select a state to compare</div>');
       return;
     }
     
-    // Get pinned state and US average
-    const pinnedRec = rec(current_month, pinned);
-    const usRecords = states.map(s => rec(current_month, +s.id)).filter(r => r);
-    
-    const usAvgRate = usRecords.reduce((sum, r) => sum + r.rate_per_100k, 0) / usRecords.length;
-    const pinnedRate = pinnedRec ? pinnedRec.rate_per_100k : 0;
-    
-    // Synthetic weapon breakdown
-    const weapons = [
-      {weapon: "Firearm", pinnedPct: 0.35, usPct: 0.25},
-      {weapon: "Knife", pinnedPct: 0.15, usPct: 0.12},
-      {weapon: "Hands/Fists", pinnedPct: 0.25, usPct: 0.35},
-      {weapon: "Blunt Object", pinnedPct: 0.15, usPct: 0.18},
-      {weapon: "Other", pinnedPct: 0.10, usPct: 0.10}
-    ];
-    
     const containerEl = document.getElementById("stackedChartContainer");
-    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    if (!containerEl) {
+      console.error("[Stacked] Container not found");
+      return;
+    }
+    let containerWidth = containerEl.offsetWidth;
+    if (!containerWidth || containerWidth === 0) {
+      const parent = containerEl.parentElement;
+      containerWidth = parent ? parent.offsetWidth - 40 : 700;
+    }
+    containerWidth = Math.max(300, containerWidth);
     
     const margin = {l: 50, t: 20, r: 80, b: 40};
     const w = Math.max(300, containerWidth - margin.l - margin.r);
@@ -1695,7 +1721,8 @@
     
     const svg = container.append("svg")
       .attr("width", containerWidth)
-      .attr("height", h + margin.t + margin.b);
+      .attr("height", h + margin.t + margin.b)
+      .style("background", "transparent");
     
     const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
