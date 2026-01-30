@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Aggravated Assault Heatmap (D3)</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
+
+  <style>
+    :root{
+      --bg:#081224; --panel:#071428; --text:#f2f7fb; --muted:#c7d6ef;
+      --stroke:rgba(255,255,255,.18); --card:rgba(255,255,255,.04);
+    }
+    body{ margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text); }
+    header{ display:flex; justify-content:space-between; align-items:center; padding:12px 16px;
+      border-bottom:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.02); }
+    header h1{ margin:0; font-size:15px; }
+    header .hint{ color:var(--muted); font-size:12px; }
+
+    .grid{ display:grid; grid-template-columns: 1fr 360px; gap:12px; padding:12px; height:calc(100vh - 49px); box-sizing:border-box; }
+    .left{ background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); border-radius:14px; overflow:hidden; position:relative; display:flex; flex-direction:column; }
+    .controls{ display:flex; gap:10px; align-items:center; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,.08); flex-wrap:wrap; }
+    label{ font-size:12px; color:var(--muted); display:flex; align-items:center; gap:6px; }
+    select,input[type="range"]{ background:rgba(255,255,255,.06); color:var(--text); border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:6px 8px; outline:none; }
+    input[type="range"]{ padding:0; height:28px; }
+    .pill{ font-size:12px; color:var(--muted); padding:6px 10px; border:1px solid rgba(255,255,255,.14); border-radius:999px; background:rgba(255,255,255,.05); }
+
+    #mapWrap{ flex:1; position:relative; }
+    svg{ width:100%; height:100%; display:block; }
+
+    .tooltip{
+      position:absolute; pointer-events:none; opacity:0;
+      background:rgba(10,14,30,.92); border:1px solid rgba(255,255,255,.16);
+      border-radius:12px; padding:10px 12px; font-size:12px; min-width:180px;
+      transform:translate(-50%,-110%);
+    }
+    .tooltip .muted{ color:var(--muted); font-size:11px; }
+
+    .legend{
+      position:absolute; top:12px; right:12px;
+      background:rgba(10,14,30,.55); border:1px solid rgba(255,255,255,.12);
+      border-radius:12px; padding:10px; font-size:12px; color:var(--muted);
+      backdrop-filter: blur(6px);
+    }
+    .legend canvas{ display:block; margin-top:8px; border-radius:999px; border:1px solid rgba(255,255,255,.14); }
+
+    .right{ background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:14px; padding:12px; overflow:auto; }
+    .card{ background:var(--card); border:1px solid rgba(255,255,255,.10); border-radius:14px; padding:12px; margin-bottom:10px; }
+    .row{ display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+    h2{ margin:0; font-size:14px; }
+    .small{ color:var(--muted); font-size:12px; }
+    .kpis{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+    .kpi{ background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px; }
+    .kpi .k{ color:var(--muted); font-size:11px; }
+    .kpi .v{ margin-top:4px; font-size:14px; }
+
+    .state{ cursor:pointer; stroke:var(--stroke); stroke-width:.8; vector-effect:non-scaling-stroke; }
+    .state:hover{ stroke:rgba(255,255,255,.7); stroke-width:1.6; }
+    .state:focus{ outline:none; stroke:rgba(255,255,255,.9); stroke-width:2; }
+
+    @media (max-width: 980px){ .grid{ grid-template-columns:1fr; height:auto; } }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Aggravated Assault • State Heatmap</h1>
+  <div class="hint">Hover = preview • Click = pin panel</div>
+</header>
+
+<div class="grid">
+  <section class="left">
+    <div class="controls">
+      <label>Metric
+        <select id="metric">
+          <option value="rate_per_100k">Offenses per 100k</option>
+          <option value="offenses">Offenses (count)</option>
+          <option value="clearance_rate">Clearance rate</option>
+          <option value="clearances">Clearances (count)</option>
+        </select>
+      </label>
+
+      <label>Month
+        <input id="month" type="range" min="0" max="0" step="1" value="0" />
+      </label>
+
+      <div class="pill" id="monthLabel">—</div>
+    </div>
+
+    <div id="mapWrap">
+      <div class="legend" id="legend"></div>
+      <div class="tooltip" id="tooltip"></div>
+      <svg id="svg"></svg>
+    </div>
+  </section>
+
+  <aside class="right">
+    <div class="card">
+      <div class="row">
+        <h2 id="pTitle">Select a state</h2>
+        <div class="small" id="pMonth">—</div>
+      </div>
+      <div class="small" id="pMetric">—</div>
+    </div>
+
+    <div class="card">
+      <div class="row"><h2>Key stats</h2><div class="small" id="pinHint">Not pinned</div></div>
+      <div class="kpis" id="kpis"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:6px;">Notes</h2>
+      <div class="small" style="line-height:1.5;">
+        • Clearance counts are usually far smaller than offenses.<br/>
+        • Use per-100k for cross-state comparisons.<br/>
+        • Click same state again to unpin.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:6px;">Trends (US total)</h2>
+      <div class="small" style="margin-bottom:8px;">Monthly incidents vs clearances</div>
+      <svg id="tsSvg" width="320" height="140" style="background:transparent;border-radius:8px" role="img" aria-label="Time series of incidents and clearances"></svg>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:6px;">Demographics (sample)</h2>
+      <div class="small" style="margin-bottom:8px;">Offender age distribution</div>
+      <svg id="ageSvg" width="320" height="180"></svg>
+      <div class="small" style="margin-top:8px;margin-bottom:6px;">Offender sex</div>
+      <svg id="sexSvg" width="320" height="120"></svg>
+    </div>
+
+    <div class="card">
+      <h2 style="margin-bottom:6px;">Flow (sample)</h2>
+      <div class="small" style="margin-bottom:8px;">Location → Weapon → Offense (drilldown sample)</div>
+      <svg id="sankeySvg" width="320" height="220" role="img" aria-label="Sample sankey flow of location to weapon to offense"></svg>
+    </div>
+  </aside>
+</div>
+
+<script>
+(async function(){
+  // ---------- DOM ----------
+  const svg = d3.select("#svg");
+  const mapWrap = document.getElementById("mapWrap");
+  const tooltip = d3.select("#tooltip").attr('role','status').attr('aria-live','polite');
+  const legend  = d3.select("#legend");
+
+  const metricSel = d3.select("#metric");
+  const monthRange= d3.select("#month");
+  const monthLabel= d3.select("#monthLabel");
+
+  const pTitle = d3.select("#pTitle");
+  const pMonth = d3.select("#pMonth");
+  const pMetric= d3.select("#pMetric");
+  const pinHint= d3.select("#pinHint");
+  const kpis   = d3.select("#kpis");
+
+  // ---------- Formatters ----------
+  const META = {
+    rate_per_100k: {label:"Offenses per 100k", fmt:d3.format(",.1f")},
+    offenses: {label:"Offenses", fmt:d3.format(",")},
+    clearance_rate: {label:"Clearance rate", fmt:d => (d*100).toFixed(1)+"%"},
+    clearances: {label:"Clearances", fmt:d3.format(",")}
+  };
+  const ramp = d3.interpolateViridis; // colorblind-friendly palette
+
+  // ---------- Load map ----------
+  const us = await d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json");
+  const states = topojson.feature(us, us.objects.states).features;
+
+  // ---------- Load data ----------
+  // Expected columns:
+  // month,state_fips,state_abbr,state_name,offenses,clearances,population
+  const raw = await d3.csv("data/state_month.csv", d => ({
+    month: d.month,
+    fips: +d.state_fips,
+    abbr: d.state_abbr,
+    name: d.state_name,
+    offenses: +d.offenses || 0,
+    clearances: +d.clearances || 0,
+    population: +d.population || 0
+  }));
+
+  const months = Array.from(new Set(raw.map(d=>d.month))).sort();
+  monthRange.attr("max", months.length-1).attr("value", months.length-1);
+  monthLabel.text(months[months.length-1]);
+
+  // month -> fips -> record (fast lookup)
+  const idx = d3.group(raw, d=>d.month, d=>d.fips);
+
+  function rec(month, fips){
+    const m = idx.get(month);
+    if(!m) return null;
+    const arr = m.get(fips);
+    if(!arr || !arr.length) return null;
+    const r = arr[0];
+    const clearance_rate = r.offenses ? r.clearances / r.offenses : 0;
+    const rate_per_100k  = r.population ? (r.offenses / r.population)*100000 : 0;
+    return {...r, clearance_rate, rate_per_100k};
+  }
+
+  // ---------- Projection / resize ----------
+  const projection = d3.geoAlbersUsa();
+  const path = d3.geoPath(projection);
+
+  function fit(){
+    const w = mapWrap.clientWidth, h = mapWrap.clientHeight;
+    svg.attr("viewBox", `0 0 ${w} ${h}`);
+    projection.fitSize([w,h], {type:"FeatureCollection", features:states});
+  }
+  fit();
+  window.addEventListener("resize", () => { fit(); render(); });
+
+  // ---------- Legend (compact) ----------
+  function drawLegend(scale, metric, month){
+    legend.html("");
+    legend.append("div").text(META[metric].label);
+    legend.append("div").style("font-size","11px").style("margin-top","2px").text(month);
+
+    const canvas = legend.append("canvas").attr("width",160).attr("height",10).node();
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(160,10);
+    for(let x=0; x<160; x++){
+      const c = d3.rgb(ramp(x/159));
+      for(let y=0; y<10; y++){
+        const i=(y*160+x)*4;
+        img.data[i]=c.r; img.data[i+1]=c.g; img.data[i+2]=c.b; img.data[i+3]=255;
+      }
+    }
+    ctx.putImageData(img,0,0);
+
+    const min = d3.min(scale.domain()), max = d3.max(scale.domain());
+    const row = legend.append("div").style("display","flex").style("justify-content","space-between").style("gap","10px").style("margin-top","8px");
+    row.append("div").style("font-size","11px").text(META[metric].fmt(min));
+    row.append("div").style("font-size","11px").text(META[metric].fmt(max));
+  }
+
+  // ---------- Panel ----------
+  let pinned = null;
+
+  function setPanel(month, fips, isPinned){
+    const r = rec(month, fips);
+    if(!r){
+      pTitle.text("No data");
+      pMonth.text(month);
+      pMetric.text(META[metricSel.node().value].label);
+      kpis.html("");
+      return;
+    }
+    pTitle.text(`${r.name} (${r.abbr})`);
+    pMonth.text(month);
+    pMetric.text(META[metricSel.node().value].label);
+    pinHint.text(isPinned ? "Pinned" : "Preview");
+
+    const rows = [
+      {k:"Offenses", v:d3.format(",")(r.offenses)},
+      {k:"Clearances", v:d3.format(",")(r.clearances)},
+      {k:"Clearance rate", v:((r.clearance_rate||0)*100).toFixed(1)+"%"},
+      {k:"Offenses per 100k", v:d3.format(",.1f")(r.rate_per_100k)}
+    ];
+    const sel = kpis.selectAll(".kpi").data(rows, d=>d.k);
+    sel.enter().append("div").attr("class","kpi")
+      .html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
+    sel.html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
+    sel.exit().remove();
+  }
+
+  // ---------- Render ----------
+  const g = svg.append("g");
+
+  function render(){
+    const month = months[+monthRange.node().value];
+    const metric = metricSel.node().value;
+    monthLabel.text(month);
+
+    // quantile scale gives good "heatmap" separation under skewed distributions
+    const vals = states.map(s => {
+      const r = rec(month, +s.id);
+      return r ? r[metric] : null;
+    }).filter(v => v!=null && isFinite(v));
+    const scale = d3.scaleQuantile().domain(vals.length?vals:[0,1]).range(d3.range(9).map(i=>ramp(i/8)));
+    drawLegend(scale, metric, month);
+
+    const sel = g.selectAll("path.state").data(states, d=>d.id);
+
+    sel.enter().append("path")
+      .attr("class","state")
+      .attr("d", path)
+      .attr("tabindex",0)
+      .attr('role','button')
+      .attr('aria-label', d => `State ${d.properties && d.properties.name ? d.properties.name : d.id}`)
+      .attr("fill", d => {
+        const r = rec(month, +d.id);
+        return r ? scale(r[metric]) : "rgba(255,255,255,.06)";
+      })
+      .on("mousemove", (event, d) => {
+        const r = rec(month, +d.id);
+        const meta = META[metric];
+        const value = r ? meta.fmt(r[metric]) : "No data";
+
+        tooltip
+          .style("opacity", 1)
+          .style("left", event.offsetX + "px")
+          .style("top",  event.offsetY + "px")
+          .html(`
+            <div style="font-weight:700;margin-bottom:4px;">
+              ${(r?.name)||"Unknown"} ${(r?.abbr)?`(${r.abbr})`:""}
+            </div>
+            <div class="muted">${month}</div>
+            <div style="margin-top:6px;">
+              <div><span class="muted">${meta.label}:</span> <b>${value}</b></div>
+              ${r ? `<div><span class="muted">Offenses:</span> ${d3.format(",")(r.offenses)}</div>` : ``}
+              ${r ? `<div><span class="muted">Clearance rate:</span> ${((r.clearance_rate||0)*100).toFixed(1)}%</div>` : ``}
+            </div>
+          `);
+
+        if(pinned == null) setPanel(month, +d.id, false);
+      })
+      .on("mouseleave", () => {
+        tooltip.style("opacity", 0);
+        if(pinned == null){
+          pTitle.text("Select a state");
+          pMonth.text("—");
+          pMetric.text("—");
+          pinHint.text("Not pinned");
+          kpis.html("");
+        }
+      })
+      .on('focus', (event,d)=>{
+        // keyboard focus shows panel preview
+        const month = months[+monthRange.node().value];
+        setPanel(month, +d.id, false);
+      })
+      .on('keydown', (event,d)=>{
+        if(event.key === 'Enter' || event.key === ' '){
+          event.preventDefault();
+          const id = +d.id;
+          pinned = (pinned === id) ? null : id;
+          if(pinned != null){ setPanel(months[+monthRange.node().value], pinned, true); }
+          else { pTitle.text('Select a state'); pMonth.text('—'); pMetric.text('—'); pinHint.text('Not pinned'); kpis.html(''); }
+        }
+      })
+      .on("click", (event, d) => {
+        const id = +d.id;
+        pinned = (pinned === id) ? null : id;
+        if(pinned != null){
+          setPanel(month, pinned, true);
+        }else{
+          pTitle.text("Select a state");
+          pMonth.text("—");
+          pMetric.text("—");
+          pinHint.text("Not pinned");
+          kpis.html("");
+        }
+      });
+
+    sel.attr("d", path)
+      .transition().duration(220)
+      .attr("fill", d => {
+        const r = rec(month, +d.id);
+        return r ? scale(r[metric]) : "rgba(255,255,255,.06)";
+      });
+
+    sel.exit().remove();
+
+    if(pinned != null) setPanel(month, pinned, true);
+  }
+
+  metricSel.on("change", render);
+  monthRange.on("input", render);
+
+  render();
+
+  // ---------- Additional charts: Time series (US totals) ----------
+  function aggregateUSMonth(raw){
+    const byMonth = d3.rollup(raw, v => ({incidents: d3.sum(v, d=>d.offenses), clearances: d3.sum(v, d=>d.clearances)}), d=>d.month);
+    const arr = Array.from(byMonth, ([month, vals])=>({month, incidents: vals.incidents, clearances: vals.clearances}));
+    arr.sort((a,b)=>a.month.localeCompare(b.month));
+    return arr;
+  }
+
+  function renderTimeSeries(){
+    const data = aggregateUSMonth(raw);
+    const svgTs = d3.select('#tsSvg');
+    svgTs.selectAll('*').remove();
+    const w = +svgTs.attr('width') - 40, h = +svgTs.attr('height') - 30;
+    const g = svgTs.append('g').attr('transform','translate(36,8)');
+
+    const parse = d3.timeParse('%Y-%m');
+    data.forEach(d=>d.dt = parse(d.month));
+
+    const x = d3.scaleTime().domain(d3.extent(data,d=>d.dt)).range([0,w]);
+    const y = d3.scaleLinear().domain([0, d3.max(data,d=>Math.max(d.incidents,d.clearances))]).nice().range([h,0]);
+
+    const lineInc = d3.line().x(d=>x(d.dt)).y(d=>y(d.incidents)).curve(d3.curveMonotoneX);
+    const lineClr = d3.line().x(d=>x(d.dt)).y(d=>y(d.clearances)).curve(d3.curveMonotoneX);
+
+    g.append('path').datum(data).attr('d', lineInc).attr('fill','none').attr('stroke','#4C78A8').attr('stroke-width',2);
+    g.append('path').datum(data).attr('d', lineClr).attr('fill','none').attr('stroke','#E45756').attr('stroke-width',2).style('stroke-dasharray','4 2');
+
+    // axes
+    const xAxis = d3.axisBottom(x).ticks(4).tickFormat(d3.timeFormat('%Y-%m'));
+    const yAxis = d3.axisLeft(y).ticks(3).tickFormat(d3.format(','));
+    g.append('g').attr('transform',`translate(0,${h})`).call(xAxis).selectAll('text').style('font-size','10px');
+    g.append('g').call(yAxis).selectAll('text').style('font-size','10px');
+
+    // legend small
+    const legend = svgTs.append('g').attr('transform','translate(8,8)');
+    legend.append('rect').attr('width',8).attr('height',8).attr('fill','#4C78A8');
+    legend.append('text').attr('x',12).attr('y',8).text('Incidents').style('font-size','10px').attr('fill', 'white');
+    legend.append('rect').attr('x',80).attr('width',8).attr('height',8).attr('fill','#E45756');
+    legend.append('text').attr('x',96).attr('y',8).text('Clearances').style('font-size','10px').attr('fill', 'white');
+  }
+
+  // ---------- Demographics (sample static data from user) ----------
+  const offenderAge = [
+    {age:'20-29',v:804232},{age:'30-39',v:780177},{age:'40-49',v:433988},{age:'10-19',v:379813},
+    {age:'Unknown',v:329673},{age:'50-59',v:237879},{age:'60-69',v:101324},{age:'70-79',v:23753},
+    {age:'0-9',v:5057},{age:'80-89',v:5002},{age:'90-Older',v:2193}
+  ];
+  const offenderSex = [
+    {sex:'Male',v:2265464},{sex:'Female',v:696299},{sex:'Unknown',v:137568},{sex:'Not Specified',v:301008}
+  ];
+
+  function renderAgeChart(){
+    const svgA = d3.select('#ageSvg'); svgA.selectAll('*').remove();
+    const margin = {l:80,t:8,r:8,b:24};
+    const w = +svgA.attr('width') - margin.l - margin.r;
+    const h = +svgA.attr('height') - margin.t - margin.b;
+    const g = svgA.append('g').attr('transform',`translate(${margin.l},${margin.t})`);
+
+    const x = d3.scaleLinear().domain([0,d3.max(offenderAge,d=>d.v)]).range([0,w]);
+    const y = d3.scaleBand().domain(offenderAge.map(d=>d.age)).range([0,h]).padding(0.15);
+
+    g.selectAll('rect').data(offenderAge).enter().append('rect')
+      .attr('y',d=>y(d.age)).attr('height',y.bandwidth())
+      .attr('x',0).attr('width',d=>x(d.v)).attr('fill','#6BAED6');
+
+    g.append('g').call(d3.axisLeft(y)).selectAll('text').style('font-size','11px');
+    g.append('g').attr('transform',`translate(0,${h})`).call(d3.axisBottom(x).ticks(3).tickFormat(d3.format('.2s'))).selectAll('text').style('font-size','10px');
+  }
+
+  function renderSexChart(){
+    const svgS = d3.select('#sexSvg'); svgS.selectAll('*').remove();
+    const w = +svgS.attr('width'), h = +svgS.attr('height');
+    const radius = Math.min(w,h)/2 - 8;
+    const g = svgS.append('g').attr('transform',`translate(${w/2},${h/2})`);
+
+    const pie = d3.pie().value(d=>d.v)(offenderSex);
+    const arc = d3.arc().innerRadius(radius*0.45).outerRadius(radius);
+    const color = d3.scaleOrdinal().domain(offenderSex.map(d=>d.sex)).range(['#4C78A8','#F28E2B','#E15759','#76B7B2']);
+
+    g.selectAll('path').data(pie).enter().append('path').attr('d',arc).attr('fill',d=>color(d.data.sex)).attr('stroke','rgba(0,0,0,0.1)');
+    // legend
+    const lg = svgS.append('g').attr('transform','translate(8,8)');
+    offenderSex.forEach((s,i)=>{
+      lg.append('rect').attr('x',0).attr('y',i*14).attr('width',8).attr('height',8).attr('fill',color(s.sex));
+      lg.append('text').attr('x',12).attr('y',i*14+8).text(`${s.sex} (${d3.format(',')(s.v)})`).style('font-size','11px').attr('fill','white');
+    });
+  }
+  // ---------- Sankey (from aggregated data) ----------
+  function renderSankey(){
+    const svgS = d3.select('#sankeySvg'); svgS.selectAll('*').remove();
+    const width = +svgS.attr('width'), height = +svgS.attr('height');
+
+    d3.json('data/sankey_us.json').then(data=>{
+      if(!data || !data.nodes || !data.links) return;
+      const sankeyGen = d3.sankey().nodeId(d=>d.id).nodeWidth(10).nodePadding(6).extent([[1,1],[width-1,height-1]]);
+      // ensure nodes array of objects
+      const nodesIn = data.nodes.map(d => ({id: d.id}));
+      const linksIn = data.links.map(d => ({source:d.source, target:d.target, value:+d.value}));
+      const graph = sankeyGen({nodes: nodesIn, links: linksIn});
+
+      const color = d3.scaleOrdinal(d3.schemeTableau10);
+
+      const g = svgS.append('g');
+      // links behind
+      g.append('g').selectAll('path').data(graph.links).enter().append('path')
+        .attr('d', d3.sankeyLinkHorizontal())
+        .attr('fill','none')
+        .attr('stroke', d=>color(d.source.id))
+        .attr('stroke-width', d=>Math.max(1,d.width))
+        .attr('opacity',0.85);
+
+      // nodes
+      g.append('g').selectAll('rect').data(graph.nodes).enter().append('rect')
+        .attr('x', d=>d.x0).attr('y', d=>d.y0).attr('width', d=>d.x1-d.x0).attr('height', d=>Math.max(1,d.y1-d.y0))
+        .attr('fill', d=>color(d.id)).attr('stroke','rgba(0,0,0,0.25)')
+        .append('title').text(d=>d.id + '\n' + d.value);
+
+      g.append('g').selectAll('text').data(graph.nodes).enter().append('text')
+        .attr('x', d=> d.x0 < width/2 ? d.x1 + 6 : d.x0 - 6)
+        .attr('y', d=> (d.y1 + d.y0)/2)
+        .attr('dy','0.35em')
+        .attr('text-anchor', d=> d.x0 < width/2 ? 'start' : 'end')
+        .text(d=>d.id)
+        .style('font-size','10px').attr('fill','white');
+    });
+  }
+
+  renderTimeSeries(); renderAgeChart(); renderSexChart(); renderSankey();
+})();
+
+</script>
+</body>
+</html>
