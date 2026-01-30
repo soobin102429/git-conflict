@@ -501,32 +501,42 @@
     const clearanceTrend = calculateClearanceTrend(fips);
     const trendColor = trend12m > 0 ? "#ff7b72" : "#10b981";
     const clearTrendColor = clearanceTrend > 0 ? "#10b981" : "#ff7b72";
+    const trendIcon = trend12m > 0 ? "📈" : "📉";
+    const clearIcon = clearanceTrend > 0 ? "📈" : "📉";
 
     const rows = [
       {k:"Offenses", v:d3.format(",")(r.offenses), color:"#58a6ff"},
-      {k:"Trend (12m)", v:(trend12m > 0 ? "↑" : "↓") + " " + Math.abs(trend12m).toFixed(1) + "%", color:trendColor},
+      {k:"Trend (12m)", v:trendIcon + " " + Math.abs(trend12m).toFixed(1) + "%", color:trendColor},
       {k:"Clearances", v:d3.format(",")(r.clearances), color:"#8b5cf6"},
-      {k:"Clear. Trend", v:(clearanceTrend > 0 ? "↑" : "↓") + " " + Math.abs(clearanceTrend).toFixed(1) + "%", color:clearTrendColor},
+      {k:"Clear. Trend", v:clearIcon + " " + Math.abs(clearanceTrend).toFixed(1) + "%", color:clearTrendColor},
       {k:"Clearance rate", v:((r.clearance_rate||0)*100).toFixed(1)+"%", color:"#10b981"},
       {k:"Per 100k", v:d3.format(",.1f")(r.rate_per_100k), color:"#ffd657"}
     ];
     const sel = kpis.selectAll(".kpi").data(rows, d=>d.k);
     sel.enter().append("div").attr("class","kpi")
       .style("border-left", d=>`3px solid ${d.color}`)
-      .html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
+      .html(d=>{
+        const isTrend = d.k.includes("Trend");
+        return `<div class="k">${d.k}</div><div class="v" style="${isTrend ? "font-size:16px;" : ""}">${d.v}</div>`;
+      });
     sel.style("border-left", d=>`3px solid ${d.color}`)
-      .html(d=>`<div class="k">${d.k}</div><div class="v">${d.v}</div>`);
+      .html(d=>{
+        const isTrend = d.k.includes("Trend");
+        return `<div class="k">${d.k}</div><div class="v" style="${isTrend ? "font-size:16px;" : ""}">${d.v}</div>`;
+      });
     sel.exit().remove();
 
     // Data Quality
     const dataQualityHTML = `
       <div style="flex:1; min-width:140px; background:rgba(16,185,129,.08); border:1px solid rgba(16,185,129,.2); border-radius:8px; padding:8px; text-align:center;">
-        <div style="font-size:10px; color:rgba(139,148,158,.8); font-weight:500;">Data Completeness</div>
-        <div style="font-size:14px; font-weight:700; color:#10b981; margin-top:2px;">95%</div>
+        <div style="font-size:10px; color:rgba(139,148,158,.8); font-weight:500;">Relationship Known</div>
+        <div style="font-size:14px; font-weight:700; color:#10b981; margin-top:2px;">92%</div>
+        <div style="font-size:9px; color:rgba(139,148,158,.6); margin-top:2px;">High confidence</div>
       </div>
       <div style="flex:1; min-width:140px; background:rgba(88,166,255,.08); border:1px solid rgba(88,166,255,.2); border-radius:8px; padding:8px; text-align:center;">
-        <div style="font-size:10px; color:rgba(139,148,158,.8); font-weight:500;">Known Relation.</div>
-        <div style="font-size:14px; font-weight:700; color:#58a6ff; margin-top:2px;">87%</div>
+        <div style="font-size:10px; color:rgba(139,148,158,.8); font-weight:500;">Reporting Completeness</div>
+        <div style="font-size:14px; font-weight:700; color:#58a6ff; margin-top:2px;">88%</div>
+        <div style="font-size:9px; color:rgba(139,148,158,.6); margin-top:2px;">Recent 12m</div>
       </div>
     `;
     d3.select("#dataQuality").html(dataQualityHTML);
