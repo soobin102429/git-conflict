@@ -1458,8 +1458,12 @@
   }
 
   function updateScatterChart(){
+    console.log("[Scatter] Rendering scatter chart...");
     const current_month = months[+monthRange.node().value];
-    if(!current_month) return;
+    if(!current_month) {
+      console.log("[Scatter] No month selected");
+      return;
+    }
     
     // Get all states data
     const stateData = states.map(s => {
@@ -1479,6 +1483,8 @@
       };
     }).filter(d => d != null);
     
+    console.log("[Scatter] Data points:", stateData.length);
+    
     if(stateData.length === 0){
       d3.select("#scatterChartContainer").html(
         '<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">No data available for selected month</div>'
@@ -1490,6 +1496,8 @@
     
     // Scales
     const xExtent = d3.extent(stateData, d => d.rate);
+    console.log("[Scatter] X extent:", xExtent);
+    
     const xScale = d3.scaleLinear().domain([0, xExtent[1] * 1.1]).range([0, w]);
     const yScale = d3.scaleLinear().domain([0, 1]).range([h, 0]);
     const colorScale = d3.scaleLinear().domain([0.2, 0.5]).range(["#58a6ff", "#ff7b72"]);
