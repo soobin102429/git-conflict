@@ -1761,12 +1761,6 @@
     });
   }
 
-  // 4. TREND CHART - Already implemented in renderTimeSeries
-  function updateTrendChartBelow(){
-    // This will reuse renderTimeSeries logic but display in new container
-    // For now, skip if already rendering in sidebar
-  }
-
   // ---------- Sankey (from aggregated data) ----------
   function renderSankey(){
     const svgS = d3.select('#sankeySvg'); svgS.selectAll('*').remove();
