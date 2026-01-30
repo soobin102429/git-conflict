@@ -1803,9 +1803,7 @@
     
     const container = d3.select(containerEl);
     container.html(""); // Clear previous
-      return;
-    }
-    let containerWidth = containerEl.offsetWidth;
+      let containerWidth = containerEl.offsetWidth;
     if (!containerWidth || containerWidth === 0) {
       const parent = containerEl.parentElement;
       containerWidth = parent ? parent.offsetWidth - 40 : 700;
