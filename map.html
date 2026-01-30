@@ -577,11 +577,11 @@
 
   // ---------- Radar chart for state profile ----------
   function renderRadar(month, fips){
-    const svg = d3.select('#radarSvg');
-    svg.selectAll('*').remove();
+    const svgRadar = d3.select('#radarSvg');
+    svgRadar.selectAll('*').remove();
     
-    const width = +svg.attr('width');
-    const height = +svg.attr('height');
+    const width = +svgRadar.attr('width');
+    const height = +svgRadar.attr('height');
     const radius = Math.min(width, height) / 2 - 30;
     const center = {x: width / 2, y: height / 2};
 
@@ -600,7 +600,7 @@
     ];
 
     const angleSlice = (Math.PI * 2) / axes.length;
-    const g = svg.append('g').attr('transform', `translate(${center.x},${center.y})`);
+    const g = svgRadar.append('g').attr('transform', `translate(${center.x},${center.y})`);
 
     // Draw concentric circles (grid)
     for(let i = 1; i <= 3; i++){
@@ -1170,10 +1170,10 @@
   }
   
   function renderComparisonRadar(month){
-    const svg = d3.select('#compRadar');
-    svg.selectAll('*').remove();
+    const svgCompRadar = d3.select('#compRadar');
+    svgCompRadar.selectAll('*').remove();
     
-    const width = +svg.attr('width'), height = +svg.attr('height');
+    const width = +svgCompRadar.attr('width'), height = +svgCompRadar.attr('height');
     const radius = Math.min(width, height) / 2 - 30;
     const center = {x: width / 2, y: height / 2};
     
@@ -1181,7 +1181,7 @@
     const axes = ['Rate/100k', 'Trend ↑', 'Clear', 'Firearm', 'Stranger'];
     const angleSlice = (Math.PI * 2) / axes.length;
     
-    const g = svg.append('g').attr('transform', `translate(${center.x},${center.y})`);
+    const g = svgCompRadar.append('g').attr('transform', `translate(${center.x},${center.y})`);
     
     // Draw concentric circles (grid)
     for(let i = 1; i <= 3; i++){
@@ -1348,12 +1348,12 @@
     const w = Math.max(500, containerWidth - margin.l - margin.r);
     const h = 260;
 
-    const svg = container.append("svg")
+    const svgTrend = container.append("svg")
       .attr("width", containerWidth)
       .attr("height", h + margin.t + margin.b)
       .style("background", "transparent");
 
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    const g = svgTrend.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
 
     const parse = d3.timeParse('%Y-%m');
     usData.forEach(d=>d.dt = parse(d.month));
@@ -1613,12 +1613,12 @@
     const w = Math.max(300, containerWidth - margin.l - margin.r);
     const h = 280;
     
-    const svg = container.append("svg")
+    const svgTrend = container.append("svg")
       .attr("width", containerWidth)
       .attr("height", h + margin.t + margin.b)
       .style("background", "transparent");
     
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    const g = svgTrend.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
     // Add gridlines
     g.append("g").attr("class", "grid-x")
@@ -1697,12 +1697,12 @@
     const container = d3.select(containerEl);
     container.html(""); // Clear previous
     
-    const svg = container.append("svg")
+    const svgScatter = container.append("svg")
       .attr("width", containerWidth)
       .attr("height", h + margin.t + margin.b)
       .style("background", "transparent");
     
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    const g = svgScatter.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
     // Add gridlines
     g.append("g").attr("class", "grid-x")
@@ -1766,10 +1766,10 @@
     g.append("g").call(yAxis).selectAll("text").style("font-size", "11px").style("fill", "rgba(139,148,158,.7)");
     
     // Axis labels
-    svg.append("text").attr("x", margin.l + w / 2).attr("y", h + margin.t + margin.b - 5)
+    svgTrend.append("text").attr("x", margin.l + w / 2).attr("y", h + margin.t + margin.b - 5)
       .attr("text-anchor", "middle").attr("font-size", "12px").attr("fill", "rgba(139,148,158,.7)")
       .text("Offense Rate (per 100,000)");
-    svg.append("text").attr("transform", "rotate(-90)")
+    svgTrend.append("text").attr("transform", "rotate(-90)")
       .attr("x", -(margin.t + h / 2)).attr("y", 12)
       .attr("text-anchor", "middle").attr("font-size", "12px").attr("fill", "rgba(139,148,158,.7)")
       .text("Clearance Rate");
@@ -1831,12 +1831,12 @@
     const width = Math.max(400, containerWidth - margin.l - margin.r);
     const height = weapons.length * cellSize + margin.t + margin.b;
     
-    const svg = container.append("svg")
-      .attr("width", containerWidth)
-      .attr("height", height)
-      .style("background", "transparent");
-    
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+      const svgHeatmap = container.append("svg")
+        .attr("width", containerWidth)
+        .attr("height", height)
+        .style("background", "transparent");
+      
+      const g = svgHeatmap.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
     const colorScale = d3.scaleLinear()
       .domain([0, d3.max(matrix, d => d.value)])
@@ -1936,12 +1936,12 @@
     const w = Math.max(300, containerWidth - margin.l - margin.r);
     const h = forcedH || 160;
     
-    const svg = container.append("svg")
+    const svgStacked = container.append("svg")
       .attr("width", containerWidth)
       .attr("height", h + margin.t + margin.b)
       .style("background", "transparent");
     
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    const g = svgStacked.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
     
     // Scales
     const xScale = d3.scaleBand().domain(["Pinned State", "US Average"]).range([0, w]).padding(0.3);
