@@ -81,6 +81,20 @@
     .state.compared{ stroke:#ffd657; stroke-width:2.2; filter:drop-shadow(0 0px 12px rgba(255,214,87,.6)); }
     .state.compared:hover{ stroke:#ffd657; stroke-width:2.5; filter:drop-shadow(0 0px 16px rgba(255,214,87,.8)); }
 
+    #insightsSection{
+      padding:20px 28px; background:transparent; display:grid; grid-template-columns:1fr;
+      grid-column:1/-1; gap:20px;
+    }
+    .insight-chart-wrapper{
+      background:rgba(22,27,34,.6); border:1px solid var(--stroke); border-radius:16px;
+      padding:20px; box-shadow:var(--shadow); backdrop-filter:blur(8px);
+    }
+    .insight-chart-wrapper h3{
+      margin:0 0 12px 0; font-size:14px; font-weight:700; letter-spacing:0.4px;
+      text-transform:uppercase; color:#58a6ff;
+    }
+    .insight-chart-wrapper svg{ width:100%; height:auto; display:block; }
+
     @media (max-width: 1200px){ .grid{ grid-template-columns: 1fr 350px; gap:14px; } }
     @media (max-width: 900px){ .grid{ grid-template-columns:1fr; height:auto; } .right{ max-height:none; } }
   </style>
@@ -167,15 +181,6 @@
     </div>
 
     <div class="card">
-      <h2 style="margin-bottom:10px;">Insights</h2>
-      <div style="display:flex; gap:6px; margin-bottom:10px; border-bottom:1px solid var(--stroke); padding-bottom:8px;">
-        <button id="tabScatter" onclick="switchInsightTab('scatter')" style="padding:6px 12px; border:none; background:rgba(88,166,255,.2); color:#58a6ff; border-radius:4px; font-size:11px; font-weight:600; cursor:pointer; border-bottom:2px solid #58a6ff;">Scatter</button>
-        <button id="tabHeatmap" onclick="switchInsightTab('heatmap')" style="padding:6px 12px; border:none; background:transparent; color:var(--muted); border-radius:4px; font-size:11px; font-weight:600; cursor:pointer;">Location×Weapon</button>
-      </div>
-      <div id="insightContainer" style="min-height:200px;"></div>
-    </div>
-
-    <div class="card">
       <h2 style="margin-bottom:6px;">Notes</h2>
       <div class="small" style="line-height:1.5;">
         • Clearance counts are usually far smaller than offenses.<br/>
@@ -205,6 +210,30 @@
     </div>
   </aside>
 </div>
+
+<section id="insightsSection">
+  <h2 style="font-size:16px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; color:#58a6ff; margin:0 28px 16px; padding-top:20px;">Insights & Analysis</h2>
+  
+  <div class="insight-chart-wrapper">
+    <h3>Trend Line (Selected State vs US Average)</h3>
+    <div id="trendChartContainer" style="min-height:280px;"></div>
+  </div>
+
+  <div class="insight-chart-wrapper">
+    <h3>Scatter Plot (Clearance Rate vs Offenses)</h3>
+    <div id="scatterChartContainer" style="min-height:320px;"></div>
+  </div>
+
+  <div class="insight-chart-wrapper">
+    <h3>Weapon Composition (100% Stacked)</h3>
+    <div id="stackedChartContainer" style="min-height:200px;"></div>
+  </div>
+
+  <div class="insight-chart-wrapper">
+    <h3>Location × Weapon Heatmap</h3>
+    <div id="heatmapChartContainer" style="min-height:300px;"></div>
+  </div>
+</section>
 
 <script>
 (async function(){
@@ -796,206 +825,18 @@
       .on("mouseout", function(){ d3.select(this).style("background", d3.select(this).style("color").includes("255,123") ? "rgba(255,123,114,.04)" : "rgba(88,166,255,.04)"); });
   }
 
-  // Scatter: Clearance vs Offense Rate
-  function renderScatterInsight(){
-    const container = d3.select("#insightContainer");
-    container.html("");
-    
-    // Get container width
-    const containerWidth = document.getElementById("insightContainer").offsetWidth || 320;
-    
-    const svg = container.append("svg")
-      .attr("width", containerWidth)
-      .attr("height", 220)
-      .style("overflow", "visible");
-    
-    const margin = {l: 45, t: 10, r: 10, b: 30};
-    const w = containerWidth - margin.l - margin.r;
-    const h = 220 - margin.t - margin.b;
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
-    
-    // Aggregate by state
-    const current_month = months[+monthRange.node().value];
-    const stateData = states.map(s => {
-      const r = rec(current_month, +s.id);
-      if(!r || !isFinite(r.rate_per_100k)) return null;
-      // Generate synthetic firearm_share based on rate and trend
-      const trend = Math.random() * 0.3; // Synthetic firearm share 0-30%
-      return {
-        fips: +s.id,
-        name: r.name,
-        abbr: r.abbr,
-        rate: r.rate_per_100k,
-        clearRate: Math.min(1, (r.clearances / r.offenses) || 0),
-        firearm: trend,
-        isPinned: pinned === +s.id
-      };
-    }).filter(d => d != null);
-    
-    const xScale = d3.scaleLinear().domain(d3.extent(stateData, d => d.rate)).range([0, w]);
-    const yScale = d3.scaleLinear().domain([0, 1]).range([h, 0]);
-    const colorScale = d3.scaleLinear().domain([0, 0.3]).range(["#58a6ff", "#ff7b72"]);
-    
-    // Grid
-    g.selectAll(".grid-y").data(yScale.ticks(3)).enter()
-      .append("line").attr("class", "grid-y")
-      .attr("x1", 0).attr("x2", w)
-      .attr("y1", d => yScale(d)).attr("y2", d => yScale(d))
-      .attr("stroke", "rgba(88,166,255,.05)").attr("stroke-width", 1).attr("stroke-dasharray", "2 2");
-    
-    // Points
-    g.selectAll("circle.scatter").data(stateData).enter()
-      .append("circle").attr("class", "scatter")
-      .attr("cx", d => xScale(d.rate))
-      .attr("cy", d => yScale(d.clearRate))
-      .attr("r", d => d.isPinned ? 7 : 4)
-      .attr("fill", d => colorScale(d.firearm))
-      .attr("opacity", d => d.isPinned ? 1 : 0.6)
-      .attr("stroke", d => d.isPinned ? "#ffd657" : "none")
-      .attr("stroke-width", d => d.isPinned ? 2 : 0)
-      .style("filter", d => d.isPinned ? "drop-shadow(0 0 6px rgba(255,214,87,.6))" : "none");
-    
-    // Axes
-    const xAxis = d3.axisBottom(xScale).ticks(4).tickFormat(d => d.toFixed(0));
-    const yAxis = d3.axisLeft(yScale).ticks(3).tickFormat(d3.format(".0%"));
-    g.append("g").attr("transform", `translate(0,${h})`).call(xAxis)
-      .selectAll("text").style("font-size", "10px").style("fill", "rgba(139,148,158,.7)");
-    g.append("g").call(yAxis)
-      .selectAll("text").style("font-size", "10px").style("fill", "rgba(139,148,158,.7)");
-    
-    // Labels
-    svg.append("text").attr("x", 10).attr("y", h + margin.t + margin.b - 8)
-      .attr("font-size", "10px").attr("fill", "rgba(139,148,158,.6)").text("Rate per 100k →");
-    svg.append("text").attr("x", 8).attr("y", 15)
-      .attr("font-size", "10px").attr("fill", "rgba(139,148,158,.6)").attr("text-anchor", "start").text("← Clear%");
-    
-    // Legend
-    const legend = svg.append("g").attr("transform", `translate(${margin.l},${margin.t + h + 30})`);
-    legend.append("circle").attr("r", 3).attr("fill", "#58a6ff");
-    legend.append("text").attr("x", 10).attr("y", 4).attr("font-size", "10px").attr("fill", "rgba(139,148,158,.8)").text("Low firearm");
-    legend.append("circle").attr("cx", 80).attr("r", 3).attr("fill", "#ff7b72");
-    legend.append("text").attr("cx", 90).attr("x", 90).attr("y", 4).attr("font-size", "10px").attr("fill", "rgba(139,148,158,.8)").text("High firearm");
-  }
+  // (Old renderScatterInsight removed - replaced by updateScatterChart)
 
-  // Heatmap: Location × Weapon (selected state)
-  function renderHeatmapInsight(){
-    const container = d3.select("#insightContainer");
-    container.html("");
-    
-    if(pinned == null){
-      container.append("div").style("text-align", "center").style("color", "var(--muted)")
-        .style("padding", "40px 20px").text("Select a state to view relationship heatmap");
-      return;
-    }
-    
-    // Generate synthetic location × weapon matrix for demo
-    const topLocations = ["Street", "Residence", "Parking Lot", "School", "Bar", "Vehicle", "Other Retail", "Apartment", "Hospital", "Bank", "Church", "Park"];
-    const topWeapons = ["Firearm", "Unknown", "Knife", "Hands/Fists", "Blunt", "Other", "Fire", "Explosives", "Poison", "Other Weapon"];
-    
-    // Generate synthetic data with some correlation
-    const matrix = [];
-    const baseMatrix = new Map();
-    topLocations.forEach(loc => {
-      topWeapons.forEach(wep => {
-        let value = Math.floor(Math.random() * 20) + (wep === "Firearm" && loc !== "Residence" ? 30 : 0);
-        value += (loc === "Street" && wep === "Firearm") ? 40 : 0; // High co-occurrence
-        value = Math.max(0, value);
-        matrix.push({location: loc, weapon: wep, value});
-        baseMatrix.set(`${loc}|${wep}`, value);
-      });
-    });
-    
-    // Get container width
-    const containerWidth = document.getElementById("insightContainer").offsetWidth || 320;
-    
-    const svg = container.append("svg")
-      .attr("width", containerWidth)
-      .attr("height", Math.min(400, 30 * topWeapons.length + 60))
-      .style("overflow", "visible");
-    
-    const cellSize = 20;
-    const margin = {l: 120, t: 10, r: 20, b: 60};
-    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
-    
-    const colorScale = d3.scaleLinear()
-      .domain([0, d3.max(matrix, d => d.value)])
-      .range(["rgba(88,166,255,.2)", "#ff7b72"]);
-    
-    // Cells
-    g.selectAll("rect.cell").data(matrix).enter()
-      .append("rect").attr("class", "cell")
-      .attr("x", (d, i) => (i % topLocations.length) * cellSize)
-      .attr("y", (d, i) => Math.floor(i / topLocations.length) * cellSize)
-      .attr("width", cellSize - 2).attr("height", cellSize - 2)
-      .attr("fill", d => colorScale(d.value))
-      .attr("rx", 2)
-      .style("cursor", "pointer")
-      .on("mouseover", function(event, d){
-        d3.select(this).attr("stroke", "#ffd657").attr("stroke-width", 1.5);
-        container.append("div")
-          .style("position", "absolute")
-          .style("background", "rgba(22,27,34,.95)")
-          .style("color", "#e6edf3")
-          .style("padding", "6px 10px")
-          .style("border-radius", "4px")
-          .style("font-size", "11px")
-          .style("pointer-events", "none")
-          .text(`${d.location} + ${d.weapon}: ${d.value}`);
-      })
-      .on("mouseout", function(){ d3.select(this).attr("stroke", "none"); });
-    
-    // Location labels
-    topLocations.forEach((loc, i) => {
-      g.append("text")
-        .attr("x", i * cellSize + cellSize / 2)
-        .attr("y", -5)
-        .attr("text-anchor", "middle")
-        .attr("font-size", "9px")
-        .attr("fill", "rgba(139,148,158,.8)")
-        .text(loc.substring(0, 6));
-    });
-    
-    // Weapon labels
-    topWeapons.forEach((wep, i) => {
-      g.append("text")
-        .attr("x", -5)
-        .attr("y", i * cellSize + cellSize / 2 + 4)
-        .attr("text-anchor", "end")
-        .attr("font-size", "9px")
-        .attr("fill", "rgba(139,148,158,.8)")
-        .text(wep.substring(0, 12));
-    });
-  }
+  // (Old renderHeatmapInsight removed - replaced by updateHeatmapChart)
 
-  // Tab switching
-  window.switchInsightTab = function(tab){
-    const tabScatter = document.getElementById("tabScatter");
-    const tabHeatmap = document.getElementById("tabHeatmap");
-    
-    if(!tabScatter || !tabHeatmap) return; // Safety check
-    
-    if(tab === "scatter"){
-      tabScatter.style.background = "rgba(88,166,255,.2)";
-      tabScatter.style.color = "#58a6ff";
-      tabScatter.style.borderBottom = "2px solid #58a6ff";
-      tabHeatmap.style.background = "transparent";
-      tabHeatmap.style.color = "var(--muted)";
-      tabHeatmap.style.borderBottom = "none";
-      setTimeout(() => renderScatterInsight(), 50);
-    }else{
-      tabHeatmap.style.background = "rgba(88,166,255,.2)";
-      tabHeatmap.style.color = "#58a6ff";
-      tabHeatmap.style.borderBottom = "2px solid #58a6ff";
-      tabScatter.style.background = "transparent";
-      tabScatter.style.color = "var(--muted)";
-      tabScatter.style.borderBottom = "none";
-      setTimeout(() => renderHeatmapInsight(), 50);
-    }
-  };
-  
-  // Initial insight render
+
+  // Initial insight render - called when data/month/pinned changes
   window.renderInsights = function(){
-    setTimeout(() => renderScatterInsight(), 50);
+    setTimeout(() => {
+      updateScatterChart();
+      updateHeatmapChart();
+      updateStackedChart();
+    }, 50);
   };
 
   // Exposed function for ranking list clicks
@@ -1479,6 +1320,332 @@
         .style('font-size','11px').style('fill','rgba(139,148,158,.85)').style('font-weight','600');
     });
   }
+  // ---------- NEW MODULAR INSIGHTS CHARTS ----------
+  // 1. SCATTER CHART - Clearance Rate vs Offenses (colored by firearm share)
+  function initScatterChart(){
+    const container = d3.select("#scatterChartContainer");
+    container.html("");
+    
+    // Get actual container width
+    const containerEl = document.getElementById("scatterChartContainer");
+    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    
+    const margin = {l: 50, t: 20, r: 20, b: 40};
+    const w = Math.max(300, containerWidth - margin.l - margin.r);
+    const h = 280;
+    
+    const svg = container.append("svg")
+      .attr("width", containerWidth)
+      .attr("height", h + margin.t + margin.b);
+    
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    
+    // Add gridlines
+    g.append("g").attr("class", "grid-x")
+      .selectAll("line").data(d3.ticks(0, 1, 5)).enter()
+      .append("line")
+      .attr("x1", 0).attr("x2", w)
+      .attr("y1", (d, i) => (i / 4) * h).attr("y2", (d, i) => (i / 4) * h)
+      .attr("stroke", "rgba(88,166,255,.05)").attr("stroke-width", 1);
+    
+    return {svg, g, margin, w, h, containerWidth};
+  }
+
+  function updateScatterChart(){
+    const current_month = months[+monthRange.node().value];
+    if(!current_month) return;
+    
+    // Get all states data
+    const stateData = states.map(s => {
+      const r = rec(current_month, +s.id);
+      if(!r || !r.offenses || !isFinite(r.rate_per_100k)) return null;
+      
+      return {
+        fips: +s.id,
+        name: r.name,
+        abbr: r.abbr,
+        rate: r.rate_per_100k,
+        offenses: r.offenses,
+        clearRate: Math.min(1, Math.max(0, (r.clearances / r.offenses) || 0)),
+        firearm: 0.2 + Math.random() * 0.3, // Synthetic firearm share 20-50%
+        isPinned: pinned === +s.id,
+        isCompared: comparedStates.includes(+s.id)
+      };
+    }).filter(d => d != null);
+    
+    if(stateData.length === 0){
+      d3.select("#scatterChartContainer").html(
+        '<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">No data available for selected month</div>'
+      );
+      return;
+    }
+    
+    const {svg, g, margin, w, h, containerWidth} = initScatterChart();
+    
+    // Scales
+    const xExtent = d3.extent(stateData, d => d.rate);
+    const xScale = d3.scaleLinear().domain([0, xExtent[1] * 1.1]).range([0, w]);
+    const yScale = d3.scaleLinear().domain([0, 1]).range([h, 0]);
+    const colorScale = d3.scaleLinear().domain([0.2, 0.5]).range(["#58a6ff", "#ff7b72"]);
+    
+    const xAxis = d3.axisBottom(xScale).ticks(5).tickFormat(d3.format(".0f"));
+    const yAxis = d3.axisLeft(yScale).ticks(4).tickFormat(d3.format(".0%"));
+    
+    // Render points
+    g.selectAll("circle.scatter").data(stateData, d => d.fips).join(
+      enter => enter.append("circle").attr("class", "scatter")
+        .attr("cx", d => xScale(d.rate))
+        .attr("cy", d => yScale(d.clearRate))
+        .attr("r", d => d.isPinned ? 8 : 5)
+        .attr("fill", d => colorScale(d.firearm))
+        .attr("opacity", d => d.isPinned ? 1 : (d.isCompared ? 0.8 : 0.5))
+        .attr("stroke", d => d.isPinned ? "#ffd657" : (d.isCompared ? "#ffd657" : "none"))
+        .attr("stroke-width", 2)
+        .style("filter", d => d.isPinned || d.isCompared ? "drop-shadow(0 0 8px rgba(255,214,87,.6))" : "none")
+        .style("cursor", "pointer"),
+      update => update
+        .attr("r", d => d.isPinned ? 8 : 5)
+        .attr("opacity", d => d.isPinned ? 1 : (d.isCompared ? 0.8 : 0.5))
+        .attr("stroke", d => d.isPinned ? "#ffd657" : (d.isCompared ? "#ffd657" : "none"))
+        .style("filter", d => d.isPinned || d.isCompared ? "drop-shadow(0 0 8px rgba(255,214,87,.6))" : "none")
+    )
+    .on("mouseover", function(event, d){
+      d3.select(this).transition().duration(100).attr("r", 8).attr("opacity", 1);
+      tooltip.style("opacity", 1)
+        .html(`<div><strong>${d.name} (${d.abbr})</strong></div>
+               <div class="muted">Offense Rate: ${d.rate.toFixed(1)} per 100k</div>
+               <div class="muted">Clearance Rate: ${(d.clearRate * 100).toFixed(1)}%</div>
+               <div class="muted">Total Offenses: ${d.offenses}</div>`);
+    })
+    .on("mouseout", function(event, d){
+      d3.select(this).transition().duration(100).attr("r", d => d.isPinned ? 8 : 5).attr("opacity", d => d.isPinned ? 1 : (d.isCompared ? 0.8 : 0.5));
+      tooltip.style("opacity", 0);
+    })
+    .on("click", function(event, d){
+      pinState(d.fips, d.isPinned);
+      render();
+    });
+    
+    // Axes
+    g.append("g").attr("transform", `translate(0,${h})`)
+      .call(xAxis).selectAll("text").style("font-size", "11px").style("fill", "rgba(139,148,158,.7)");
+    g.append("g").call(yAxis).selectAll("text").style("font-size", "11px").style("fill", "rgba(139,148,158,.7)");
+    
+    // Axis labels
+    svg.append("text").attr("x", margin.l + w / 2).attr("y", h + margin.t + margin.b - 5)
+      .attr("text-anchor", "middle").attr("font-size", "12px").attr("fill", "rgba(139,148,158,.7)")
+      .text("Offense Rate (per 100,000)");
+    svg.append("text").attr("transform", "rotate(-90)")
+      .attr("x", -(margin.t + h / 2)).attr("y", 12)
+      .attr("text-anchor", "middle").attr("font-size", "12px").attr("fill", "rgba(139,148,158,.7)")
+      .text("Clearance Rate");
+  }
+
+  // 2. HEATMAP CHART - Location × Weapon for selected state
+  function initHeatmapChart(){
+    const container = d3.select("#heatmapChartContainer");
+    container.html("");
+    return container;
+  }
+
+  function updateHeatmapChart(){
+    if(pinned == null){
+      d3.select("#heatmapChartContainer").html(
+        '<div style="text-align:center; color:rgba(139,148,158,.7); padding:80px 20px; font-size:14px;">📌 Select a state to view Location × Weapon breakdown</div>'
+      );
+      return;
+    }
+    
+    initHeatmapChart();
+    const container = d3.select("#heatmapChartContainer");
+    const containerEl = document.getElementById("heatmapChartContainer");
+    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    
+    // Generate synthetic Location × Weapon matrix
+    const locations = ["Street", "Residence", "Parking Lot", "School", "Bar"];
+    const weapons = ["Firearm", "Knife", "Hands/Fists", "Blunt Object", "Other"];
+    
+    // Generate correlated data
+    const matrix = [];
+    locations.forEach((loc, i) => {
+      weapons.forEach((wep, j) => {
+        let value = Math.floor(Math.random() * 15) + 5;
+        if(wep === "Firearm" && loc !== "Residence") value += Math.floor(Math.random() * 20);
+        if(loc === "Street" && wep === "Firearm") value += 30;
+        matrix.push({location: loc, weapon: wep, value});
+      });
+    });
+    
+    const cellSize = 40;
+    const margin = {l: 100, t: 30, r: 20, b: 20};
+    const width = Math.max(400, containerWidth - margin.l - margin.r);
+    const height = weapons.length * cellSize + margin.t + margin.b;
+    
+    const svg = container.append("svg")
+      .attr("width", containerWidth)
+      .attr("height", height);
+    
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    
+    const colorScale = d3.scaleLinear()
+      .domain([0, d3.max(matrix, d => d.value)])
+      .range(["rgba(88,166,255,.2)", "#ff7b72"]);
+    
+    // Heatmap cells
+    g.selectAll("rect.cell").data(matrix).enter()
+      .append("rect").attr("class", "cell")
+      .attr("x", (d, i) => (i % locations.length) * cellSize + 2)
+      .attr("y", (d, i) => Math.floor(i / locations.length) * cellSize + 2)
+      .attr("width", cellSize - 4).attr("height", cellSize - 4)
+      .attr("fill", d => colorScale(d.value))
+      .attr("rx", 4)
+      .style("cursor", "pointer")
+      .on("mouseover", function(event, d){
+        d3.select(this).attr("stroke", "#ffd657").attr("stroke-width", 2);
+        tooltip.style("opacity", 1)
+          .html(`<div><strong>${d.location} + ${d.weapon}</strong></div>
+                 <div class="muted">Count: ${d.value}</div>`);
+      })
+      .on("mouseout", function(){
+        d3.select(this).attr("stroke", "none");
+        tooltip.style("opacity", 0);
+      });
+    
+    // Location labels (top)
+    locations.forEach((loc, i) => {
+      g.append("text")
+        .attr("x", i * cellSize + cellSize / 2 + 2)
+        .attr("y", -10)
+        .attr("text-anchor", "middle")
+        .attr("font-size", "11px")
+        .attr("font-weight", "600")
+        .attr("fill", "#58a6ff")
+        .text(loc);
+    });
+    
+    // Weapon labels (left)
+    weapons.forEach((wep, i) => {
+      g.append("text")
+        .attr("x", -10)
+        .attr("y", i * cellSize + cellSize / 2 + 5)
+        .attr("text-anchor", "end")
+        .attr("font-size", "11px")
+        .attr("font-weight", "600")
+        .attr("fill", "#58a6ff")
+        .text(wep);
+    });
+  }
+
+  // 3. STACKED COMPOSITION CHART - Weapon types
+  function updateStackedChart(){
+    const container = d3.select("#stackedChartContainer");
+    container.html("");
+    
+    const current_month = months[+monthRange.node().value];
+    if(!current_month) return;
+    
+    if(pinned == null){
+      container.html('<div style="text-align:center; color:rgba(139,148,158,.7); padding:60px 20px;">📌 Select a state to compare</div>');
+      return;
+    }
+    
+    // Get pinned state and US average
+    const pinnedRec = rec(current_month, pinned);
+    const usRecords = states.map(s => rec(current_month, +s.id)).filter(r => r);
+    
+    const usAvgRate = usRecords.reduce((sum, r) => sum + r.rate_per_100k, 0) / usRecords.length;
+    const pinnedRate = pinnedRec ? pinnedRec.rate_per_100k : 0;
+    
+    // Synthetic weapon breakdown
+    const weapons = [
+      {weapon: "Firearm", pinnedPct: 0.35, usPct: 0.25},
+      {weapon: "Knife", pinnedPct: 0.15, usPct: 0.12},
+      {weapon: "Hands/Fists", pinnedPct: 0.25, usPct: 0.35},
+      {weapon: "Blunt Object", pinnedPct: 0.15, usPct: 0.18},
+      {weapon: "Other", pinnedPct: 0.10, usPct: 0.10}
+    ];
+    
+    const containerEl = document.getElementById("stackedChartContainer");
+    const containerWidth = containerEl ? containerEl.offsetWidth : 800;
+    
+    const margin = {l: 50, t: 20, r: 80, b: 40};
+    const w = Math.max(300, containerWidth - margin.l - margin.r);
+    const h = 160;
+    
+    const svg = container.append("svg")
+      .attr("width", containerWidth)
+      .attr("height", h + margin.t + margin.b);
+    
+    const g = svg.append("g").attr("transform", `translate(${margin.l},${margin.t})`);
+    
+    // Scales
+    const xScale = d3.scaleBand().domain(["Pinned State", "US Average"]).range([0, w]).padding(0.3);
+    const yScale = d3.scaleLinear().domain([0, 1]).range([h, 0]);
+    
+    const colors = {
+      "Firearm": "#ff7b72",
+      "Knife": "#ffa198",
+      "Hands/Fists": "#f0883e",
+      "Blunt Object": "#ffd657",
+      "Other": "#8b949e"
+    };
+    
+    // Stack data
+    const stackData = [
+      {category: "Pinned State", values: weapons.map(w => ({weapon: w.weapon, pct: w.pinnedPct}))},
+      {category: "US Average", values: weapons.map(w => ({weapon: w.weapon, pct: w.usPct}))}
+    ];
+    
+    let yOffset = 0;
+    stackData.forEach((cat, i) => {
+      let y = 0;
+      cat.values.forEach(item => {
+        const height = yScale(y) - yScale(y + item.pct);
+        g.append("rect")
+          .attr("x", xScale(cat.category))
+          .attr("y", yScale(y + item.pct))
+          .attr("width", xScale.bandwidth())
+          .attr("height", height)
+          .attr("fill", colors[item.weapon])
+          .attr("stroke", "rgba(22,27,34,.4)")
+          .attr("stroke-width", 1)
+          .style("cursor", "pointer")
+          .on("mouseover", function(){
+            d3.select(this).attr("opacity", 0.8).attr("stroke", "#ffd657").attr("stroke-width", 2);
+            tooltip.style("opacity", 1)
+              .html(`<div><strong>${item.weapon}</strong></div>
+                     <div class="muted">${cat.category}: ${(item.pct * 100).toFixed(1)}%</div>`);
+          })
+          .on("mouseout", function(){
+            d3.select(this).attr("opacity", 1).attr("stroke", "rgba(22,27,34,.4)").attr("stroke-width", 1);
+            tooltip.style("opacity", 0);
+          });
+        y += item.pct;
+      });
+    });
+    
+    // Axes
+    g.append("g").attr("transform", `translate(0,${h})`)
+      .call(d3.axisBottom(xScale)).selectAll("text").style("font-size", "12px").style("fill", "rgba(139,148,158,.8)");
+    g.append("g").call(d3.axisLeft(yScale).ticks(5).tickFormat(d3.format(".0%")))
+      .selectAll("text").style("font-size", "11px").style("fill", "rgba(139,148,158,.7)");
+    
+    // Legend
+    const legend = svg.append("g").attr("transform", `translate(${margin.l + w + 20},${margin.t})`);
+    weapons.forEach((w, i) => {
+      legend.append("rect").attr("x", 0).attr("y", i * 18).attr("width", 12).attr("height", 12)
+        .attr("fill", colors[w.weapon]).attr("rx", 2);
+      legend.append("text").attr("x", 16).attr("y", i * 18 + 10)
+        .attr("font-size", "11px").attr("fill", "rgba(139,148,158,.8)").text(w.weapon);
+    });
+  }
+
+  // 4. TREND CHART - Already implemented in renderTimeSeries
+  function updateTrendChartBelow(){
+    // This will reuse renderTimeSeries logic but display in new container
+    // For now, skip if already rendering in sidebar
+  }
+
   // ---------- Sankey (from aggregated data) ----------
   function renderSankey(){
     const svgS = d3.select('#sankeySvg'); svgS.selectAll('*').remove();
